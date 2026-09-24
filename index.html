@@ -1023,6 +1023,8 @@ async function loadAuto(silent){const msg=$('#autoMsg');
     $('#manualBox').open=false;
     const cj=companies.filter(g=>g.cc==='JP').length,cu=companies.length-cj,ds=$('#dataStatus');
     ds.style.display='';ds.textContent=`データ ${d.updated||'日時不明'} 更新：日本株${cj}社${cu?`・米国株${cu}社`:''}（毎週土曜に自動更新）`;
+    const us0={cache:'JPXに接続できなかったため、前回の銘柄一覧で更新しています。',yahoo_scan:'JPXに接続できなかったため、証券コードの総当たりで銘柄を集めています（銘柄名は英語、業種は大分類）。',jpx_en:'JPXの英語版一覧を使ったため、銘柄名は英語表記です。'}[d.universe_source];
+    if(us0)ds.textContent+='　※'+us0;
     const my=d.min_yield??2.5;msg.textContent=`${d.updated||'日時不明'} 更新：${n}銘柄を読み込みました（日本株は利回り${my}%以上${d.min_yield_us!=null?`、米国株は${d.min_yield_us}%以上`:''}）。`;
     $('#autoLead').textContent=`最終更新 ${d.updated||'日時不明'}。プライム・スタンダードの全銘柄${d.min_yield_us!=null?'とS&P500採用の米国株':''}から、高配当の候補を自動抽出しています。`;
     setTimeout(()=>show(Object.keys(st.holdings).length?'buy':'pf'),400);}
