@@ -1,0 +1,52 @@
+name: 高配当株データ更新
+
+on:
+  schedule:
+    - cron: "0 22 * * 5"   # 毎週土曜 7:00 JST（金曜引け後）
+  workflow_dispatch:        # 「Run workflow」ボタンで手動実行（ワンクリック）
+
+permissions:
+  contents: write
+
+concurrency:
+  group: data-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 財務キャッシュを復元
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: fin-cache-${{ github.run_id }}
+          restore-keys: fin-cache-
+
+      - run: pip install -r requirements.txt
+
+      - name: データ収集とスクリーニング
+        timeout-minutes: 300
+        env:
+          UNIVERSE_LIMIT: ${{ vars.UNIVERSE_LIMIT }}
+          COUNTRIES: "JP,US"        # 日本株だけにする場合は "JP"
+          MIN_YIELD_US: "2.0"
+        run: python screen.py
+
+      - name: 結果をコミット
+        run: |
+          git config user.name "screener-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add docs/data.json
+          git diff --cached --quiet && exit 0
+          git commit -m "data: $(date -u +'%Y-%m-%d')"
+          git pull --rebase origin ${{ github.ref_name }}
+          git push
