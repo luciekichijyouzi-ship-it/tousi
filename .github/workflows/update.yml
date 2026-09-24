@@ -14,18 +14,18 @@ concurrency:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04     # 自動の版上げ（Ubuntu 26）で急に動かなくなるのを防ぐため固定
     timeout-minutes: 350
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
 
       - name: 財務キャッシュを復元
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: cache
           key: fin-cache-${{ github.run_id }}
@@ -37,15 +37,14 @@ jobs:
         timeout-minutes: 300
         env:
           UNIVERSE_LIMIT: ${{ vars.UNIVERSE_LIMIT }}
-          COUNTRIES: "JP,US"        # 日本株だけにする場合は "JP"
-          MIN_YIELD_US: "2.0"
+          COUNTRIES: "JP,US"        # JP=日本の上場株すべて、US=米国高配当ETF（VYM・HDV・SPYD）
         run: python screen.py
 
       - name: 結果をコミット
         run: |
           git config user.name "screener-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add docs/data.json
+          for f in data.json docs/data.json; do if [ -f "$f" ]; then git add "$f"; fi; done
           git diff --cached --quiet && exit 0
           git commit -m "data: $(date -u +'%Y-%m-%d')"
           git pull --rebase origin ${{ github.ref_name }}
