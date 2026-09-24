@@ -17,7 +17,8 @@
   US_STOCKS       1 にすると米国の個別株（S&P500採用銘柄）も集める（既定 0＝ETFだけ）
   MIN_YIELD_US    米国個別株の一次選別の最低利回り%（既定 2.0）
 """
-import io, json, math, os, random, time, datetime as dt
+import io, json, math, os, random, re, time, datetime as dt
+from urllib.parse import urljoin
 from pathlib import Path
 
 import pandas as pd
@@ -26,7 +27,8 @@ import yfinance as yf
 
 SP500_LIST = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
 JPX_LIST = "https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xls"
-OUT = Path("docs/data.json")
+# 保存先：docs フォルダにアプリがあればそこ、なければリポジトリの一番上（index.html と同じ場所）
+OUT = (Path("docs") if Path("docs/index.html").exists() else Path(".")) / "data.json"
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 JST = dt.timezone(dt.timedelta(hours=9))
@@ -68,34 +70,173 @@ def clean(v):
 
 
 # ---------- 1. 銘柄一覧 ----------
-def load_universe() -> pd.DataFrame:
-    log("上場銘柄一覧を取得")
-    r = retry(lambda: requests.get(JPX_LIST, timeout=60, headers={"User-Agent": "Mozilla/5.0"}), label="JPX一覧")
+JPX_PAGE = "https://www.jpx.co.jp/markets/statistics-equities/misc/01.html"
+JPX_PAGE_EN = "https://www.jpx.co.jp/english/markets/statistics-equities/misc/01.html"
+JPX_LIST_EN = "https://www.jpx.co.jp/english/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_e.xls"
+UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/126.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/vnd.ms-excel,*/*;q=0.8",
+      "Accept-Language": "ja,en;q=0.8", "Referer": JPX_PAGE}
+MKT_EN = {"プライム": "Prime", "スタンダード": "Standard", "グロース": "Growth"}
+SECTOR_EN_JA = {"Fishery, Agriculture & Forestry": "水産・農林業", "Mining": "鉱業", "Construction": "建設業", "Foods": "食料品",
+    "Textiles & Apparels": "繊維製品", "Pulp & Paper": "パルプ・紙", "Chemicals": "化学", "Pharmaceutical": "医薬品",
+    "Oil & Coal Products": "石油・石炭製品", "Rubber Products": "ゴム製品", "Glass & Ceramics Products": "ガラス・土石製品",
+    "Iron & Steel": "鉄鋼", "Nonferrous Metals": "非鉄金属", "Metal Products": "金属製品", "Machinery": "機械",
+    "Electric Appliances": "電気機器", "Transportation Equipment": "輸送用機器", "Precision Instruments": "精密機器",
+    "Other Products": "その他製品", "Electric Power & Gas": "電気・ガス業", "Land Transportation": "陸運業",
+    "Marine Transportation": "海運業", "Air Transportation": "空運業",
+    "Warehousing & Harbor Transportation Services": "倉庫・運輸関連業", "Information & Communication": "情報・通信業",
+    "Wholesale Trade": "卸売業", "Retail Trade": "小売業", "Banks": "銀行業",
+    "Securities & Commodity Futures": "証券、商品先物取引業", "Insurance": "保険業",
+    "Other Financing Business": "その他金融業", "Real Estate": "不動産業", "Services": "サービス業"}
+# Yahoo Financeの業種（最後の手段で使う）を日本語の大分類に
+YSECTOR_JA = {"Technology": "情報技術", "Industrials": "資本財", "Consumer Cyclical": "一般消費財",
+    "Consumer Defensive": "生活必需品", "Financial Services": "金融", "Healthcare": "ヘルスケア",
+    "Basic Materials": "素材", "Communication Services": "通信サービス", "Energy": "エネルギー",
+    "Utilities": "公益", "Real Estate": "不動産"}
+UNIVERSE_CACHE = CACHE_DIR / "universe_jp.json"
+# 実際の一覧は約3,800銘柄。これより極端に少ない一覧は壊れているとみなす（テスト用の UNIVERSE_LIMIT 指定時は緩める）
+MIN_UNIVERSE = int(os.getenv("MIN_UNIVERSE") or (1 if LIMIT else 1000))
+UNIVERSE_SOURCE = "jpx"
+
+
+def _is_excel(b: bytes) -> bool:
+    return b[:4] == b"\xd0\xcf\x11\xe0" or b[:2] == b"PK"      # .xls / .xlsx の先頭
+
+
+def _get(url, label):
+    """取得して結果をログに残す（止まった時にログで理由が分かるように）"""
+    try:
+        r = requests.get(url, timeout=60, headers=UA)
+    except Exception as e:
+        log(f"{label}: 接続失敗 {str(e)[:150]}")
+        return None
+    try:   # 記録に失敗しても取得結果は使う
+        ctype = (getattr(r, "headers", None) or {}).get("Content-Type", "?")
+        log(f"{label}: HTTP {getattr(r, 'status_code', '?')}・{len(getattr(r, 'content', b'') or b''):,}バイト・{ctype}")
+    except Exception:
+        pass
+    return r
+
+
+def _fetch_excel(url, label):
+    for k in range(3):
+        r = _get(url, label)
+        if r is not None and r.status_code == 200 and _is_excel(r.content):
+            return r.content
+        if r is not None and r.status_code == 200:
+            log(f"{label}: Excelではない内容が返されました（先頭: {r.content[:60]!r}）")
+        time.sleep(5 * (k + 1))
+    return None
+
+
+def _find_link(page_url, pattern, label):
+    r = _get(page_url, label)
     if r is None or r.status_code != 200:
-        raise SystemExit("JPXの上場銘柄一覧を取得できませんでした。URLが変更された可能性があります。")
-    df = pd.read_excel(io.BytesIO(r.content))
+        return None
+    m = re.search(pattern, r.text)
+    return urljoin(page_url, m.group(1)) if m else None
+
+
+def _parse_jpx(content, english=False) -> pd.DataFrame:
+    df = pd.read_excel(io.BytesIO(content))
     df.columns = [str(c).strip() for c in df.columns]
 
-    def col(exact, contains=None):
-        if exact in df.columns:
-            return exact
-        return next((c for c in df.columns if contains and contains in c), None)
+    def col(*cands):
+        for c in cands:
+            if c in df.columns:
+                return c
+        for c in cands:
+            hit = next((x for x in df.columns if c.lower() in x.lower()), None)
+            if hit:
+                return hit
+        return None
 
-    code_col, name_col = col("コード"), col("銘柄名")
-    mkt_col, sec_col = col("市場・商品区分", "市場"), col("33業種区分")
+    if english:
+        code_col, name_col = col("Local Code", "Code"), col("Name (English)", "Name")
+        mkt_col, sec_col = col("Section/Products", "Market"), col("33 Sector(name)", "33 Sector")
+    else:
+        code_col, name_col = col("コード"), col("銘柄名")
+        mkt_col, sec_col = col("市場・商品区分", "市場"), col("33業種区分")
     if not all([code_col, name_col, mkt_col]):
-        raise SystemExit(f"銘柄一覧の列名が想定と違います: {list(df.columns)}")
+        raise ValueError(f"銘柄一覧の列名が想定と違います: {list(df.columns)}")
     df = df.rename(columns={code_col: "code", name_col: "name", mkt_col: "market"})
     df["sector"] = df[sec_col].astype(str).str.strip() if sec_col else "未分類"
+    if english:
+        df["sector"] = df["sector"].map(lambda x: SECTOR_EN_JA.get(x, x))
     df["code"] = df["code"].astype(str).str.strip().str.upper().str.replace(r"\.0$", "", regex=True)
     df = df[df["code"].str.fullmatch(r"\d{3}[0-9A-Z]")]                  # 普通株（新コード対応）
-    df = df[df["market"].astype(str).apply(lambda m: any(k in m for k in MARKETS) and "外国" not in m)]
+    keys = [MKT_EN.get(k, k) for k in MARKETS] if english else MARKETS
+    df = df[df["market"].astype(str).apply(lambda m: any(k in m for k in keys) and "外国" not in m and "Foreign" not in m)]
     df = df[~df["sector"].isin(["-", "nan", ""])]
-    df = df[["code", "name", "market", "sector"]].drop_duplicates("code").reset_index(drop=True)
+    return df[["code", "name", "market", "sector"]].drop_duplicates("code").reset_index(drop=True)
+
+
+def _scan_universe() -> pd.DataFrame:
+    """最後の手段：証券コード1300〜9999をYahoo Financeで総当たり（名前・業種は後で補う）"""
+    log("JPXの一覧が取れないため、証券コードを総当たりで確認します（銘柄名は英語表記になります）")
+    codes = [str(c) for c in range(1300, 10000)]
+    return pd.DataFrame({"code": codes, "name": codes, "market": "東証", "sector": "", "need_info": True})
+
+
+def load_universe() -> pd.DataFrame:
+    global UNIVERSE_SOURCE
+    log("上場銘柄一覧を取得")
+    df = None
+    tries = [("JPX一覧", lambda: JPX_LIST, False),
+             ("JPXページから一覧を探す", lambda: _find_link(JPX_PAGE, r'href="([^"]*data_j\.xlsx?)"', "JPXページ"), False),
+             ("JPX英語版一覧", lambda: JPX_LIST_EN, True),
+             ("JPX英語版ページから探す", lambda: _find_link(JPX_PAGE_EN, r'href="([^"]*data_e\.xlsx?)"', "JPX英語版ページ"), True)]
+    for label, url_fn, en in tries:
+        url = url_fn()
+        if not url:
+            continue
+        content = _fetch_excel(url, label)
+        if not content:
+            continue
+        try:
+            df = _parse_jpx(content, english=en)
+            if len(df) < MIN_UNIVERSE:
+                log(f"{label}: 銘柄数が少なすぎます（{len(df)}）。別の取得方法を試します")
+                df = None
+                continue
+            UNIVERSE_SOURCE = "jpx_en" if en else "jpx"
+            UNIVERSE_CACHE.write_text(df.to_json(orient="records", force_ascii=False))
+            break
+        except Exception as e:
+            log(f"{label}: 読み込み失敗 {str(e)[:200]}")
+            df = None
+    if df is None and UNIVERSE_CACHE.exists():
+        try:
+            df = pd.read_json(io.StringIO(UNIVERSE_CACHE.read_text()), orient="records", dtype={"code": str})
+            UNIVERSE_SOURCE = "cache"
+            log(f"JPXから取れないため、前回の一覧（{len(df)}銘柄）を使います")
+        except Exception as e:
+            log(f"前回の一覧も読めません: {e}")
+            df = None
+    if df is None:
+        df = _scan_universe()
+        UNIVERSE_SOURCE = "yahoo_scan"
     if LIMIT:
         df = df.head(LIMIT)
-    log(f"対象 {len(df)} 銘柄")
+    log(f"対象 {len(df)} 銘柄（一覧の取得元: {UNIVERSE_SOURCE}）")
     return df
+
+
+def fill_info(row):
+    """総当たりで見つけた銘柄の名前・業種・種類をYahooから補う。普通株以外（ETF・REIT等）は None"""
+    def get():
+        return yf.Ticker(row["yft"]).info
+    info = retry(get, tries=2, base=5, label=f"{row['code']} 銘柄情報") or {}
+    if info.get("quoteType") not in (None, "EQUITY"):
+        return None
+    ind = str(info.get("industry") or "")
+    if "REIT" in ind.upper():
+        return None
+    row = row.copy()
+    row["name"] = info.get("shortName") or info.get("longName") or row["code"]
+    row["sector"] = YSECTOR_JA.get(info.get("sector"), info.get("sector") or "未分類")
+    return row
 
 
 GICS_JA = {"Consumer Staples": "生活必需品", "Utilities": "公益", "Health Care": "ヘルスケア", "Energy": "エネルギー",
@@ -319,6 +460,10 @@ def main():
 
     out = []
     for i, row in pre.iterrows():
+        if str(row.get("need_info", "")) == "True":          # 総当たりで見つけた銘柄だけ（空欄・NaNは対象外）
+            row = fill_info(row)
+            if row is None:
+                continue
         years = fetch_financials(row["code"], row["yft"])
         time.sleep(0.6 + random.random() * 0.4)
         if not years:
@@ -343,7 +488,7 @@ def main():
         "updated": dt.datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
         "source": "Yahoo Finance (yfinance) / JPX上場銘柄一覧" + (" / S&P500構成銘柄" if US_STOCKS else ""),
         "min_yield": MIN_YIELD, "min_yield_us": MIN_YIELD_US if US_STOCKS else None, "universe": len(uni), "count": len(out),
-        "counts": counts, "macro": load_macro(), "etfs": load_etfs() if "US" in COUNTRIES else [], "stocks": out,
+        "counts": counts, "universe_source": UNIVERSE_SOURCE, "macro": load_macro(), "etfs": load_etfs() if "US" in COUNTRIES else [], "stocks": out,
     }, ensure_ascii=False, allow_nan=False))
     log(f"完了: {len(out)} 銘柄を保存 {counts}（{(time.time() - t0) / 60:.0f}分）")
 
