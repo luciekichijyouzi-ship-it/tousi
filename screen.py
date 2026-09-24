@@ -12,9 +12,10 @@
   UNIVERSE_LIMIT  テスト用。先頭N銘柄だけ処理（例: 50）
   MIN_YIELD       一次選別の最低利回り%（既定 2.5）
   CACHE_DAYS      財務キャッシュの有効日数（既定 30）
-  MARKETS         対象市場（既定 "プライム,スタンダード"）
-  COUNTRIES       対象国（既定 "JP,US"）。米国はS&P500採用銘柄（SBI証券でほぼすべて取扱い）
-  MIN_YIELD_US    米国株の一次選別の最低利回り%（既定 2.0）
+  MARKETS         対象市場（既定 "プライム,スタンダード,グロース"＝日本の上場株すべて）
+  COUNTRIES       対象国（既定 "JP,US"）。US は米国高配当ETF（VYM・HDV・SPYD）
+  US_STOCKS       1 にすると米国の個別株（S&P500採用銘柄）も集める（既定 0＝ETFだけ）
+  MIN_YIELD_US    米国個別株の一次選別の最低利回り%（既定 2.0）
 """
 import io, json, math, os, random, time, datetime as dt
 from pathlib import Path
@@ -35,7 +36,8 @@ MIN_YIELD = float(os.getenv("MIN_YIELD") or 2.5)
 CACHE_DAYS = int(os.getenv("CACHE_DAYS") or 30)
 COUNTRIES = [c.strip().upper() for c in (os.getenv("COUNTRIES") or "JP,US").split(",") if c.strip()]
 MIN_YIELD_US = float(os.getenv("MIN_YIELD_US") or 2.0)
-MARKETS = [m.strip() for m in (os.getenv("MARKETS") or "プライム,スタンダード").split(",") if m.strip()]
+US_STOCKS = (os.getenv("US_STOCKS") or "0").strip() in ("1", "true", "yes")
+MARKETS = [m.strip() for m in (os.getenv("MARKETS") or "プライム,スタンダード,グロース").split(",") if m.strip()]
 
 
 def log(*a):
@@ -299,7 +301,7 @@ def main():
         jp["yft"] = jp["code"] + ".T"
         jp["country"], jp["currency"], jp["min_y"] = "JP", "JPY", MIN_YIELD
         parts.append(jp)
-    if "US" in COUNTRIES:
+    if "US" in COUNTRIES and US_STOCKS:
         us = load_us_universe()
         us["country"], us["currency"], us["min_y"] = "US", "USD", MIN_YIELD_US
         parts.append(us)
@@ -335,12 +337,12 @@ def main():
             log(f"{i}/{len(pre)} 処理中（収録 {len(out)}）")
 
     out.sort(key=lambda s: -(s["ttm_dps"] / s["years"][-1]["price"]))
-    counts = {c: sum(1 for s in out if s["country"] == c) for c in COUNTRIES}
+    counts = {c: sum(1 for s in out if s["country"] == c) for c in ["JP"] + (["US"] if US_STOCKS else [])}
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps({
         "updated": dt.datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
-        "source": "Yahoo Finance (yfinance) / JPX上場銘柄一覧 / S&P500構成銘柄",
-        "min_yield": MIN_YIELD, "min_yield_us": MIN_YIELD_US, "universe": len(uni), "count": len(out),
+        "source": "Yahoo Finance (yfinance) / JPX上場銘柄一覧" + (" / S&P500構成銘柄" if US_STOCKS else ""),
+        "min_yield": MIN_YIELD, "min_yield_us": MIN_YIELD_US if US_STOCKS else None, "universe": len(uni), "count": len(out),
         "counts": counts, "macro": load_macro(), "etfs": load_etfs() if "US" in COUNTRIES else [], "stocks": out,
     }, ensure_ascii=False, allow_nan=False))
     log(f"完了: {len(out)} 銘柄を保存 {counts}（{(time.time() - t0) / 60:.0f}分）")

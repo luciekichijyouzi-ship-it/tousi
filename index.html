@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>高配当株スクリーナー</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#1C2B3A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="高配当株">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -113,6 +121,7 @@ details.manual>summary::before{content:'▸ ';color:var(--sub)}details.manual[op
 details.manual>summary small{display:block;font-weight:400;color:var(--sub);font-size:12px;margin:4px 0 0 1em}
 details.manual[open]>summary{margin-bottom:14px}
 body:not(.hasUS) .usOnly{display:none!important}
+body:not(.hasUSStock) .usStockOnly{display:none!important}
 body:not(.nisa) .nisaOnly{display:none!important}
 body:not(.etf) .etfOnly{display:none!important}
 .nisaBox{border:1px solid var(--gold);background:var(--paper);border-radius:10px;padding:12px 14px;margin-top:12px;font-size:13px;line-height:1.8}
@@ -191,18 +200,24 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
 <section id="screen">
   <div class="panel">
     <h2>判定条件</h2>
-    <p class="lead">両学長がよく挙げる基準を初期値にしています。数値は自由に変えられます。<span class="usOnly">米国株は同じ考え方で、米国の実情に合わせた基準（右列）で判定します。</span></p>
+    <p class="lead">両学長がよく挙げる基準を初期値にしています。数値は自由に変えられます。<span class="usOnly usStockOnly">米国株は同じ考え方で、米国の実情に合わせた基準（右列）で判定します。</span></p>
     <div id="crits"></div>
     <div class="grid" style="margin-top:12px">
       <label class="f">「右肩上がり」で許す減少回数<input type="number" id="allowDown" value="1" min="0" max="5"></label>
       <label class="f">合格に必要な条件数<select id="needPass"></select></label>
-      <label class="f usOnly">表示する国<select id="ccFilter"><option value="all">すべて</option><option value="JP">日本</option><option value="US">米国</option></select></label>
+      <label class="f usOnly usStockOnly">表示する国<select id="ccFilter"><option value="all">すべて</option><option value="JP">日本</option><option value="US">米国</option></select></label>
     </div>
   </div>
   <div class="kpis" id="screenKpi"></div>
   <div class="panel">
     <div class="scroll"><table id="resTable"></table></div>
     <p class="note">○＝合格　×＝不合格　－＝データ不足（不合格扱い）。行をタップすると最新年度の数値を確認できます。</p>
+  </div>
+  <div class="panel usOnly" id="etfPanel">
+    <h2>米国高配当ETF</h2>
+    <p class="lead">米国は個別株を判定せず、1本で数十〜数百社に分散済みの高配当ETFを使います。ポートフォリオでは「米国ETFの割合」の分だけ組み入れます。</p>
+    <div id="etfScreen"></div>
+    <p class="note">利回りは直近1年の分配金÷株価。増配率は過去5年の分配金の年平均の伸び。経費率は運用会社の公表値の目安です。購入前にSBI証券の銘柄ページで確認してください。</p>
   </div>
 </section>
 
@@ -380,10 +395,10 @@ function num(v){if(v==null)return null;let s=String(v).trim().replace(/[０-９�
   if(s===''||s==='-'||s==='--')return null;const n=parseFloat(s);return isNaN(n)?null:n;}
 function yearKey(v){const m=String(v).match(/(\d{4})(?:\D*(\d{1,2}))?/);return m?(+m[1])*100+(m[2]?+m[2]:0):num(v)||0;}
 
-let companies=[],macro=null,hasUS=false,etfs=[],dataVer=0;
+let companies=[],macro=null,hasUS=false,hasUSStock=false,etfs=[],dataVer=0;
 const NISA_YEAR=240e4;   // 成長投資枠の年間上限
-function setUS(){hasUS=companies.some(g=>g.cc==='US')||etfs.length>0;document.body.classList.toggle('hasUS',hasUS);
-  const um=$('#usMode');[...um.options].forEach(o=>{o.disabled=(o.value==='etf'&&!etfs.length)||(o.value==='stock'&&!companies.some(g=>g.cc==='US'));});
+function setUS(){hasUSStock=companies.some(g=>g.cc==='US');hasUS=hasUSStock||etfs.length>0;document.body.classList.toggle('hasUS',hasUS);document.body.classList.toggle('hasUSStock',hasUSStock);
+  const um=$('#usMode');[...um.options].forEach(o=>{o.disabled=(o.value==='etf'&&!etfs.length)||(o.value==='stock'&&!hasUSStock);o.hidden=o.disabled;});
   if(um.selectedOptions[0]&&um.selectedOptions[0].disabled)um.value=[...um.options].find(o=>!o.disabled).value;
   syncModes();}
 function syncModes(){const nisa=$('#acct').value==='nisa',mode=hasUS?$('#usMode').value:'none';
@@ -467,7 +482,7 @@ function applyStrat(id){const s=STRATS.find(x=>x.id===id);stratId=id;const c=cfg
 function renderCrits(){
   $('#crits').innerHTML=CRIT.map(c=>`<div class="crit"><input type="checkbox" id="c_${c.id}" ${cstate[c.id].on?'checked':''} aria-label="${c.nm}を使う（日本）">
     <label class="nm" for="c_${c.id}">${c.nm}</label>${c.trend?'':`<span>${c.op}</span><input type="number" step="0.25" id="v_${c.id}" value="${cstate[c.id].v}" aria-label="${c.nm}の基準値（日本）"><span>${c.u}</span>`}
-    <span class="us usOnly">米国<input type="checkbox" id="cu_${c.id}" ${cstate[c.id].onUS?'checked':''} aria-label="${c.nm}を使う（米国）">${c.trend?'':`${c.nmUS?c.nmUS+' ':''}${c.opUS||c.op}<input type="number" step="0.25" id="vu_${c.id}" value="${cstate[c.id].vus}" aria-label="${c.nm}の基準値（米国）">${c.uUS||c.u}`}</span></div>`).join('');
+    <span class="us usOnly usStockOnly">米国<input type="checkbox" id="cu_${c.id}" ${cstate[c.id].onUS?'checked':''} aria-label="${c.nm}を使う（米国）">${c.trend?'':`${c.nmUS?c.nmUS+' ':''}${c.opUS||c.op}<input type="number" step="0.25" id="vu_${c.id}" value="${cstate[c.id].vus}" aria-label="${c.nm}の基準値（米国）">${c.uUS||c.u}`}</span></div>`).join('');
   CRIT.forEach(c=>{$('#c_'+c.id).onchange=e=>{cstate[c.id].on=e.target.checked;fillNeed();runAll();};
     $('#cu_'+c.id).onchange=e=>{cstate[c.id].onUS=e.target.checked;runAll();};
     if(!c.trend){$('#v_'+c.id).oninput=e=>{const v=parseFloat(e.target.value);if(isFinite(v)){cstate[c.id].v=v;runAll();}};
@@ -509,15 +524,20 @@ function evalCo(g,cfg){
 const screenAll=cfg=>companies.map(g=>evalCo(g,cfg)).sort((a,b)=>(b.ok-a.ok)||(b.passN-a.passN)||((b.m.yield||0)-(a.m.yield||0)));
 
 let results=[],showN=150;
+function renderEtfScreen(){const box=$('#etfScreen');if(!box)return;const fx=fxRate();
+  box.innerHTML=etfs.length?`<div class="etfs">${etfs.map(e=>{const y=e.price>0?e.ttm/e.price*100:null;
+    return `<div><b>${esc(e.code)}　利回り ${pct(y,2)}</b>${esc(e.name)}<br>1口 $${(+e.price).toFixed(2)}（約${yen(e.price*fx)}円）<br>過去の増配 ${pct(e.dg,1)}/年・経費率 ${e.er!=null?(+e.er).toFixed(2)+'%':'－'}</div>`;}).join('')}</div>`
+    :'<p class="msg">米国ETFのデータがありません。次回のデータ更新で取得されます。</p>';}
 function renderScreen(){
-  const cfg=cfgCurrent(); results=screenAll(cfg); const act=CRIT.filter(c=>cfg.crit[c.id].on||(hasUS&&cfg.crit[c.id].onUS));
-  const cf=hasUS?$('#ccFilter').value:'all', view=results.map((x,i)=>({x,i})).filter(o=>cf==='all'||o.x.g.cc===cf), okN=view.filter(o=>o.x.ok).length;
+  renderEtfScreen();
+  const cfg=cfgCurrent(); results=screenAll(cfg); const act=CRIT.filter(c=>cfg.crit[c.id].on||(hasUSStock&&cfg.crit[c.id].onUS));
+  const cf=hasUSStock?$('#ccFilter').value:'all', view=results.map((x,i)=>({x,i})).filter(o=>cf==='all'||o.x.g.cc===cf), okN=view.filter(o=>o.x.ok).length;
   const okJ=results.filter(x=>x.ok&&!x.US).length,okU=results.filter(x=>x.ok&&x.US).length;
-  $('#screenKpi').innerHTML=`<div class="kpi"><b>${view.length}</b><span>表示中の銘柄</span></div><div class="kpi gold"><b>${okN}</b><span>合格した銘柄${hasUS?`（日本${okJ}・米国${okU}）`:''}</span></div>
+  $('#screenKpi').innerHTML=`<div class="kpi"><b>${view.length}</b><span>表示中の銘柄</span></div><div class="kpi gold"><b>${okN}</b><span>合格した銘柄${hasUSStock?`（日本${okJ}・米国${okU}）`:''}</span></div>
     <div class="kpi"><b>${pct(avg(view.filter(o=>o.x.ok).map(o=>o.x.m.yield)),2)}</b><span>合格銘柄の平均利回り</span></div>`;
-  const short={yield:'利回基準',payout:'性向↑',payoutMin:'性向↓',opm:'利益率',equity:hasUS?'財務安全':'自己資本',sales:'売上',eps:'EPS',opcf:'営業CF',cash:'現金',dps:'非減配'};
+  const short={yield:'利回基準',payout:'性向↑',payoutMin:'性向↓',opm:'利益率',equity:hasUSStock?'財務安全':'自己資本',sales:'売上',eps:'EPS',opcf:'営業CF',cash:'現金',dps:'非減配'};
   $('#resTable').innerHTML=`<thead><tr><th class="l">銘柄</th><th>判定</th><th>利回り</th><th>配当性向</th><th>増配率/年</th>${act.map(c=>`<th>${short[c.id]}</th>`).join('')}</tr></thead><tbody>`+
-    view.slice(0,showN).map(({x,i})=>`<tr class="${x.ok?'':'dim'}" data-i="${i}" style="cursor:pointer"><td class="l name">${hasUS?`<span class="flag">${x.US?'米':'日'}</span>`:''}${esc(x.g.name)}${x.g.suspect?' <span class="warn" title="記念配当やデータ異常の疑い">⚠</span>':''}<small>${esc(x.g.code)}　${esc(x.g.sector)}　${x.g.years.length}年分</small></td>
+    view.slice(0,showN).map(({x,i})=>`<tr class="${x.ok?'':'dim'}" data-i="${i}" style="cursor:pointer"><td class="l name">${hasUSStock?`<span class="flag">${x.US?'米':'日'}</span>`:''}${esc(x.g.name)}${x.g.suspect?' <span class="warn" title="記念配当やデータ異常の疑い">⚠</span>':''}<small>${esc(x.g.code)}　${esc(x.g.sector)}　${x.g.years.length}年分</small></td>
     <td><span class="verdict ${x.ok?'ok':'ng'}">${x.ok?'合格':'対象外'}</span><br><small style="color:var(--sub)">${x.passN}/${x.total}</small></td>
     <td>${pct(x.m.yield,2)}</td><td>${pct(x.m.payout,0)}</td><td>${pct(x.m.dg,1)}</td>
     ${act.map(c=>{const v=x.r[c.id];return v===undefined?'<td><span class="stamp n" title="この国では使わない条件">·</span></td>':`<td><span class="stamp ${v===true?'p':v===false?'f':'n'}">${v===true?'○':v===false?'×':'－'}</span></td>`}).join('')}</tr>`).join('')+'</tbody>';
@@ -1032,6 +1052,8 @@ $('#sampleBtn').onclick=()=>{ // 架空の企業データ（動作確認用）
 ['allowDown','needPass','ccFilter','fx','acct','usMode','etfPick','nisaLeft'].forEach(id=>{$('#'+id).addEventListener('input',runAll);$('#'+id).addEventListener('change',runAll);});
 ['budget','lot','capStock','capSector','method','minStocks','monthly','target','growth','tax','reinvest','storeCost','storeProfit','regime','capUS','maxStocks'].forEach(id=>{const el=$('#'+id);const h=()=>{clearTimeout(el._t);el._t=setTimeout(()=>{if(companies.length){renderPF();renderSim();}},150);};el.addEventListener('input',h);el.addEventListener('change',h);});
 renderCrits();fillNeed();applyStrat('hybrid');syncModes();initBuy();loadAuto(true);
+if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)&&!/claude\.ai|claudeusercontent/.test(location.hostname)){
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 })();
 </script>
 </body>

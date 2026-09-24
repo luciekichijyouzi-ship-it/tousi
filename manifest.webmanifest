@@ -1,0 +1,17 @@
+{
+  "name": "高配当株スクリーナー",
+  "short_name": "高配当株",
+  "description": "リベ大式の条件で高配当株を判定し、NISAの毎月の買付リストを自動で作るアプリ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F7F8F6",
+  "theme_color": "#1C2B3A",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
