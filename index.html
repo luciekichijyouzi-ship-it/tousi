@@ -48,7 +48,7 @@ nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--
 nav button{flex:0 0 auto;border:0;background:none;color:var(--sub);font:inherit;font-size:14px;font-weight:700;
   padding:8px 12px;border-radius:6px;cursor:pointer;white-space:nowrap}
 nav .ts{display:none}
-@media (max-width:520px){td.name{white-space:normal;min-width:8.5em;max-width:13em;overflow-wrap:anywhere}#buyTable td.name{max-width:none}#buyTable{width:100%}nav .tl{display:none}nav .ts{display:inline}nav button{padding-left:10px!important;padding-right:10px!important}
+@media (max-width:520px){#buyKpi .kpi.minor{display:none}#naviPanel h2{font-size:15px;margin-bottom:6px}td.name{white-space:normal;min-width:8.5em;max-width:13em;overflow-wrap:anywhere}#buyTable td.name{max-width:none}#buyTable{width:100%}nav .tl{display:none}nav .ts{display:inline}nav button{padding-left:10px!important;padding-right:10px!important}
   .wideOnly{display:none}#buy .grid{grid-template-columns:1fr 1fr!important}}
 nav button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
 nav button:disabled{opacity:.4;cursor:default}
@@ -136,6 +136,10 @@ body:not(.etf) .etfOnly{display:none!important}
 #holdTable input{width:90px;text-align:right}
 .acct{display:inline-block;font-size:11px;font-weight:700;border-radius:3px;padding:0 5px}
 .acct.n{background:var(--pass);color:#fff}.acct.t{border:1px solid var(--line);color:var(--sub)}
+.navi .item{border-left:4px solid var(--line);padding:8px 12px;margin:0 0 10px;background:var(--paper);border-radius:6px;font-size:13px;line-height:1.7}
+.navi .item b{display:block;font-size:14px;margin-bottom:2px}
+.navi .warn2{border-left-color:#C8553D}.navi .info{border-left-color:var(--gold)}.navi .good{border-left-color:var(--pass)}
+.navi .item .btn{margin-top:8px;padding:6px 14px;font-size:13px}
 .rec{border:2px solid var(--pass);background:var(--pass-bg);border-radius:10px;padding:14px;margin-bottom:12px}
 .rec b{font-size:17px;display:block;margin-bottom:4px}.rec p{margin:0;font-size:13px;line-height:1.7}
 .sig{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px}
@@ -200,7 +204,7 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
 <section id="screen">
   <div class="panel">
     <h2>判定条件</h2>
-    <p class="lead">両学長がよく挙げる基準を初期値にしています。数値は自由に変えられます。<span class="usOnly usStockOnly">米国株は同じ考え方で、米国の実情に合わせた基準（右列）で判定します。</span></p>
+    <p class="lead">両学長がよく挙げる基準を初期値にしています。数値は自由に変えられます。「危機でも配当を維持」は、リーマン・ショックとコロナ・ショックの時に配当をどれだけ守ったか（悪い方の年）で判定し、上場が新しく記録がない銘柄はこの条件を外して判定します。<span class="usOnly usStockOnly">米国株は同じ考え方で、米国の実情に合わせた基準（右列）で判定します。</span></p>
     <div id="crits"></div>
     <div class="grid" style="margin-top:12px">
       <label class="f">「右肩上がり」で許す減少回数<input type="number" id="allowDown" value="1" min="0" max="5"></label>
@@ -255,7 +259,7 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
     <div id="macroBox"></div>
     <div id="recBox"></div>
     <div class="scroll"><table id="fcTable"></table></div>
-    <p class="note">毎月の追加投資・税率・再投資の設定は「4. 将来シミュレーション」の値を使います。増配率は過去実績を業界平均の2%へ半分寄せて控えめに見積もり、不況シナリオでは3年目に財務の弱さと銘柄数の少なさに応じた減配を入れています。あくまで比較のための仮定で、将来を保証するものではありません。</p>
+    <p class="note">毎月の追加投資・税率・再投資の設定は「4. 将来シミュレーション」の値を使います。増配率は過去実績を業界平均の2%へ半分寄せて控えめに見積もり、不況シナリオでは3年目に減配を入れています。減配の大きさは、組み入れた銘柄がリーマン・コロナの時に実際に配当をどれだけ減らしたかと、財務の弱さ・銘柄数の少なさから見積もります。あくまで比較のための仮定で、将来を保証するものではありません。</p>
   </div>
   <div class="panel">
     <h2>詳細設定（選んだ戦略の初期値を変更できます）</h2>
@@ -289,7 +293,7 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
   <div class="panel"><h2>年間配当（税引後）の推移</h2><div class="sim-bars" id="simBars"></div>
     <div class="legend"><span><em style="background:var(--gold)"></em>目標未達</span><span><em style="background:var(--pass)"></em>目標達成</span></div>
     <div class="scroll" style="margin-top:12px"><table id="simTable"></table></div></div>
-  <div class="panel">
+  <div class="panel" id="storePanel" hidden>   <!-- 出店投資との比較：非表示（計算処理はそのまま残し、エラーが出ないように） -->
     <h2>出店投資と比べる</h2>
     <p class="lead">同じ資金を新店舗に回した場合の利回りと並べて、資金配分を判断する材料にします。</p>
     <div class="grid">
@@ -305,9 +309,10 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
 <section id="buy">
   <div class="panel">
     <h2>今月の買付リスト</h2>
-    <p class="lead" style="margin-bottom:0">戦略：<b id="buyStrat"></b>。不足している銘柄から順に、今月買う株数を出します。注文したら下の「保有に反映」を押すだけで、翌月は続きから計算します。</p>
+    <p class="lead" style="margin-bottom:0">戦略：<b id="buyStrat"></b>。不足している銘柄から順に、今月買う株数を出します。</p>
   </div>
   <div class="kpis" id="buyKpi"></div>
+  <div class="panel navi" id="naviPanel"><h2>設定ナビ</h2><div id="naviBox"></div></div>
   <div class="panel">
     <div class="scroll"><table id="buyTable"></table></div>
     <div class="msg" id="buyMsg" role="status"></div>
@@ -328,6 +333,7 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
       <label class="f">注文数の上限（件/月）<input type="number" id="maxOrders" value="10" min="1" max="100"></label>
       <label class="f">1件の最低購入額（円）<input type="number" id="minOrder" value="3000" step="1000" min="0"></label>
       <label class="f nisaOnly">今年のNISA成長枠の使用額（円）<input type="number" id="nisaUsed" value="0" step="10000" min="0" max="2400000"></label>
+      <label class="f">前月までの残り（繰越）<span class="row" style="gap:8px;align-items:center"><input type="checkbox" id="useCarry" checked style="width:20px;height:20px"><span id="carryLbl">0円を今月に足す</span></span></label>
     </div>
     </div>
   </details>
@@ -363,6 +369,7 @@ const yen=n=>n==null||isNaN(n)?'－':Math.round(n).toLocaleString('ja-JP');
 const man=n=>n==null||isNaN(n)?'－':(Math.abs(n)>=1e8?(n/1e8).toFixed(2)+'億円':Math.abs(n)>=1e4?Math.round(n/1e4).toLocaleString('ja-JP')+'万円':Math.round(n).toLocaleString('ja-JP')+'円');
 const pct=(n,d=1)=>n==null||isNaN(n)?'－':n.toFixed(d)+'%';
 const avg=a=>{a=a.filter(v=>v!=null&&!isNaN(v));return a.length?a.reduce((s,v)=>s+v,0)/a.length:null;};
+const median=a=>{const v=a.filter(x=>x!=null&&isFinite(x)).sort((p,q)=>p-q);if(!v.length)return null;const m=Math.floor(v.length/2);return v.length%2?v[m]:(v[m-1]+v[m])/2;};   // 極端な値に引っ張られない
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 /* ---------- columns / CSV ---------- */
@@ -395,6 +402,7 @@ function num(v){if(v==null)return null;let s=String(v).trim().replace(/[０-９�
   if(s===''||s==='-'||s==='--')return null;const n=parseFloat(s);return isNaN(n)?null:n;}
 function yearKey(v){const m=String(v).match(/(\d{4})(?:\D*(\d{1,2}))?/);return m?(+m[1])*100+(m[2]?+m[2]:0):num(v)||0;}
 
+let crisisBench=null;
 let companies=[],macro=null,hasUS=false,hasUSStock=false,etfs=[],dataVer=0;
 const NISA_YEAR=240e4;   // 成長投資枠の年間上限
 function setUS(){hasUSStock=companies.some(g=>g.cc==='US');hasUS=hasUSStock||etfs.length>0;document.body.classList.toggle('hasUS',hasUS);document.body.classList.toggle('hasUSStock',hasUSStock);
@@ -424,18 +432,20 @@ function ingest(text){
     ['price','sales','op','opm','eps','dps','payout','equity','opcf','cash','debt'].forEach(k=>y[k]=m[k]!=null?num(r[m[k]]):null);
     const dup=g.years.find(o=>o.yk===y.yk);
     if(dup){Object.keys(y).forEach(k=>{if(y[k]!=null)dup[k]=y[k];});}else g.years.push(y);});
-  macro=null;dataVer++;
+  macro=null;dataVer++;dataMeta={count:Object.keys(by).length,source:'csv',stats:null};
   companies=Object.values(by).map(g=>{g.years.sort((a,b)=>a.yk-b.yk);if(!g.name)g.name=g.code;if(!g.sector)g.sector='未分類';g.cc=g.cc||'JP';g.cur=g.cc==='US'?'USD':'JPY';return g;});
   setUS();
   const miss=Object.keys(COLS).filter(k=>m[k]==null&&!['name','sector','opm','op','payout','debt','country'].includes(k)).map(k=>COLS[k][0]);
   return {n:companies.length,rows:rows.length-1,miss};
 }
+let dataMeta={count:0,source:'none',stats:null};
 function ingestJSON(d){dataVer++;
   companies=(d.stocks||[]).filter(s=>s&&s.code&&Array.isArray(s.years)&&s.years.length).map(s=>({code:String(s.code),name:s.name||s.code,sector:s.sector||'未分類',
-    cc:s.country==='US'?'US':'JP',cur:s.country==='US'?'USD':'JPY',ttm:s.ttm_dps??null,suspect:!!s.suspect,
+    cc:s.country==='US'?'US':'JP',cur:s.country==='US'?'USD':'JPY',ttm:s.ttm_dps??null,suspect:!!s.suspect,crisis:s.crisis&&typeof s.crisis==='object'?s.crisis:null,
     years:s.years.map(y=>({year:y.year,yk:yearKey(y.year),price:y.price??null,sales:y.sales??null,op:y.op??null,opm:null,
       eps:y.eps??null,ni:y.ni??null,dps:y.dps??null,payout:null,equity:y.equity??null,opcf:y.opcf??null,cash:y.cash??null,debt:y.debt??null})).sort((a,b)=>a.yk-b.yk)}));
-  macro=d.macro||null;
+  macro=d.macro||null;crisisBench=d.crisis_bench||null;
+  dataMeta={count:(d.stocks||[]).length,source:d.universe_source||'jpx',stats:d.stats||null};
   etfs=(d.etfs||[]).filter(e=>e&&e.code&&e.price>0&&e.ttm>=0).map(e=>({...e,dg:e.dg??null}));
   if(macro&&macro.usdjpy>50&&macro.usdjpy<400)$('#fx').value=macro.usdjpy.toFixed(1);
   setUS();
@@ -453,22 +463,23 @@ const CRIT=[
   {id:'eps',nm:'EPSが右肩上がり',trend:1},
   {id:'opcf',nm:'営業CFが毎年黒字',trend:1},
   {id:'cash',nm:'現金等が増加傾向',trend:1,usOff:1},
-  {id:'dps',nm:'減配していない',trend:1}
+  {id:'dps',nm:'減配していない',trend:1},
+  {id:'crisis',nm:'危機でも配当を維持（リーマン・コロナ）',op:'≥',v:70,u:'%'}
 ];
 /* ---------- strategies ---------- */
 const STRATS=[
  {id:'hybrid',nm:'段階型：リベ大優先＋A補完',tag:'リベ大式に自然に寄っていく',
   desc:'リベ大式の基準に合格した銘柄を最優先で選び、2倍の比率で配分します。足りない分はパターンAの基準の銘柄で埋めます。リベ大式の合格が増えるほど、その比率が自動で上がります。持っているA銘柄は売らずに残し、新しいお金をリベ大式の銘柄に優先して回します。',
-  crit:{yield:3.0,payout:60,payoutMin:20,opm:8,equity:40},us:{yield:2.5,payout:70,payoutMin:20,opm:8,equity:4},on:{},allowDown:1,needSlack:1,capStock:5,capSector:15,method:'equal',minStocks:20,maxStocks:30,tier:'libe'},
+  crit:{yield:3.0,payout:60,payoutMin:20,opm:8,equity:40,crisis:50},us:{yield:2.5,payout:70,payoutMin:20,opm:8,equity:4,crisis:50},on:{},allowDown:1,needSlack:1,capStock:5,capSector:15,method:'equal',minStocks:20,maxStocks:30,tier:'libe'},
  {id:'libe',nm:'リベ大式（標準）',tag:'両学長の基準をそのまま',
   desc:'利回り3.75%以上、配当性向30〜50%、営業利益率10%以上、自己資本比率50%以上、売上・EPS・現金が右肩上がり、営業CF黒字、非減配。合格銘柄に均等に配分し、1銘柄5%・1業種15%以内で30銘柄以上に分散します。',
-  crit:{yield:3.75,payout:50,payoutMin:30,opm:10,equity:50},us:{yield:3.0,payout:60,payoutMin:30,opm:10,equity:3},on:{},allowDown:1,needSlack:0,capStock:5,capSector:15,method:'equal',minStocks:30,maxStocks:40},
+  crit:{yield:3.75,payout:50,payoutMin:30,opm:10,equity:50,crisis:70},us:{yield:3.0,payout:60,payoutMin:30,opm:10,equity:3,crisis:70},on:{},allowDown:1,needSlack:0,capStock:5,capSector:15,method:'equal',minStocks:30,maxStocks:40},
  {id:'growth',nm:'パターンA：増配成長型',tag:'今の利回りより「育つ利回り」',
   desc:'入口の利回りは3.0%まで許容する代わりに、減配ゼロを必須にし、過去の増配率が高い銘柄に多く配分します。買値に対する利回りが年々上がる設計で、6年後の配当額を最大化する狙いです。',
-  crit:{yield:3.0,payout:60,payoutMin:20,opm:8,equity:40},us:{yield:2.5,payout:70,payoutMin:20,opm:8,equity:4},on:{},allowDown:1,needSlack:1,capStock:8,capSector:20,method:'growth',minStocks:20,maxStocks:30},
+  crit:{yield:3.0,payout:60,payoutMin:20,opm:8,equity:40,crisis:50},us:{yield:2.5,payout:70,payoutMin:20,opm:8,equity:4,crisis:50},on:{},allowDown:1,needSlack:1,capStock:8,capSector:20,method:'growth',minStocks:20,maxStocks:30},
  {id:'fortress',nm:'パターンB：鉄壁高利回り型',tag:'減配リスクを徹底的に削る',
   desc:'利回り4.0%以上かつ、配当性向45%以下・営業利益率15%以上・自己資本比率60%以上と財務条件を厳しくします。合格数は減りますが、不況時も配当を維持しやすい銘柄に絞り、財務の強さ×利回りで配分します。',
-  crit:{yield:4.0,payout:45,payoutMin:25,opm:15,equity:60},us:{yield:3.5,payout:55,payoutMin:25,opm:15,equity:2},on:{},allowDown:1,needSlack:0,capStock:7,capSector:20,method:'quality',minStocks:15,maxStocks:25}
+  crit:{yield:4.0,payout:45,payoutMin:25,opm:15,equity:60,crisis:90},us:{yield:3.5,payout:55,payoutMin:25,opm:15,equity:2,crisis:90},on:{},allowDown:1,needSlack:0,capStock:7,capSector:20,method:'quality',minStocks:15,maxStocks:25}
 ];
 let stratId='libe';
 const cstate={}; CRIT.forEach(c=>cstate[c.id]={on:true,v:c.v,onUS:!c.usOff,vus:c.v});
@@ -517,13 +528,29 @@ function evalCo(g,cfg){
   r.cash=trendUp(Y.map(y=>y.cash),cfg.allowDown);
   const cf=Y.map(y=>y.opcf).filter(v=>v!=null);r.opcf=cf.length>=2?cf.every(v=>v>0):null;
   const d2=Y.map(y=>y.dps).filter(v=>v!=null);r.dps=d2.length>=2?d2.every((v,i)=>i===0||v>=d2[i-1]):null;
-  const act=CRIT.filter(c=>isOn(c.id)),passN=act.filter(c=>r[c.id]===true).length;
+  const cr=g.crisis||{},crv=['lehman','covid'].map(k=>cr[k]&&cr[k].div!=null?cr[k].div:null).filter(v=>v!=null);
+  m.crisis=crv.length?Math.min(...crv)*100:null; m.crisisN=crv.length;
+  r.crisis=cmp('crisis',m.crisis);
+  const act=CRIT.filter(c=>isOn(c.id)&&!(c.id==='crisis'&&r.crisis==null)),passN=act.filter(c=>r[c.id]===true).length;
   CRIT.forEach(c=>{if(!isOn(c.id))r[c.id]=undefined;});
   return {g,price,m,r,passN,total:act.length,ok:act.length>0&&passN>=act.length-cfg.needSlack&&!g.suspect,latest:L,US};
 }
 const screenAll=cfg=>companies.map(g=>evalCo(g,cfg)).sort((a,b)=>(b.ok-a.ok)||(b.passN-a.passN)||((b.m.yield||0)-(a.m.yield||0)));
 
 let results=[],showN=150;
+function crisisText(x){const cr=x.g.crisis||{},b=crisisBench||{},f=(k,nm)=>{const c=cr[k];
+    if(!c)return `${nm}：記録なし（上場が新しい）`;
+    const dv=c.div!=null?`配当 維持率${Math.round(c.div*100)}%${c.div>=0.999?'（減配なし）':c.div===0?'（無配に転落）':''}`:c.nodiv?'配当 危機前から無配':'配当 記録なし';
+    const dd=c.dd!=null?`・株価 ${c.dd}%${b[k]!=null?`（TOPIX ${b[k]}%）`:''}`:'';return `${nm}：${dv}${dd}`;};
+  return `<span${x.m.crisis!=null&&x.m.crisis<50?' class="warn"':''}>${f('lehman','リーマン時')}　${f('covid','コロナ時')}</span><br>`;}
+// 合格0の戦略：合格に近い銘柄（不合格が2つ以内）で、多く引っかかっている条件を示す
+function whyZero(s){const cfg=cfgFromStrat(s),res=screenAll(cfg).filter(x=>!x.g.suspect);
+  if(!res.length)return '合格0：データがありません';
+  const near=res.filter(x=>x.total-x.passN<=Math.max(2,cfg.needSlack+2)),base=near.length?near:res,cnt={};
+  base.forEach(x=>CRIT.forEach(c=>{if(x.r[c.id]===false||(x.r[c.id]===null&&c.id!=='crisis'))cnt[c.id]=(cnt[c.id]||0)+1;}));
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([id])=>CRIT.find(c=>c.id===id).nm.replace(/（.*?）/,''));
+  const best=Math.max(...res.map(x=>x.passN)),tot=res.find(x=>x.passN===best).total;
+  return `合格0：最も近い銘柄で${tot}条件中${best}つ合格。多く不合格なのは「${top.join('」「')}」`;}
 function renderEtfScreen(){const box=$('#etfScreen');if(!box)return;const fx=fxRate();
   box.innerHTML=etfs.length?`<div class="etfs">${etfs.map(e=>{const y=e.price>0?e.ttm/e.price*100:null;
     return `<div><b>${esc(e.code)}　利回り ${pct(y,2)}</b>${esc(e.name)}<br>1口 $${(+e.price).toFixed(2)}（約${yen(e.price*fx)}円）<br>過去の増配 ${pct(e.dg,1)}/年・経費率 ${e.er!=null?(+e.er).toFixed(2)+'%':'－'}</div>`;}).join('')}</div>`
@@ -535,7 +562,7 @@ function renderScreen(){
   const okJ=results.filter(x=>x.ok&&!x.US).length,okU=results.filter(x=>x.ok&&x.US).length;
   $('#screenKpi').innerHTML=`<div class="kpi"><b>${view.length}</b><span>表示中の銘柄</span></div><div class="kpi gold"><b>${okN}</b><span>合格した銘柄${hasUSStock?`（日本${okJ}・米国${okU}）`:''}</span></div>
     <div class="kpi"><b>${pct(avg(view.filter(o=>o.x.ok).map(o=>o.x.m.yield)),2)}</b><span>合格銘柄の平均利回り</span></div>`;
-  const short={yield:'利回基準',payout:'性向↑',payoutMin:'性向↓',opm:'利益率',equity:hasUSStock?'財務安全':'自己資本',sales:'売上',eps:'EPS',opcf:'営業CF',cash:'現金',dps:'非減配'};
+  const short={yield:'利回基準',payout:'性向↑',payoutMin:'性向↓',opm:'利益率',equity:hasUSStock?'財務安全':'自己資本',crisis:'危機耐性',sales:'売上',eps:'EPS',opcf:'営業CF',cash:'現金',dps:'非減配'};
   $('#resTable').innerHTML=`<thead><tr><th class="l">銘柄</th><th>判定</th><th>利回り</th><th>配当性向</th><th>増配率/年</th>${act.map(c=>`<th>${short[c.id]}</th>`).join('')}</tr></thead><tbody>`+
     view.slice(0,showN).map(({x,i})=>`<tr class="${x.ok?'':'dim'}" data-i="${i}" style="cursor:pointer"><td class="l name">${hasUSStock?`<span class="flag">${x.US?'米':'日'}</span>`:''}${esc(x.g.name)}${x.g.suspect?' <span class="warn" title="記念配当やデータ異常の疑い">⚠</span>':''}<small>${esc(x.g.code)}　${esc(x.g.sector)}　${x.g.years.length}年分</small></td>
     <td><span class="verdict ${x.ok?'ok':'ng'}">${x.ok?'合格':'対象外'}</span><br><small style="color:var(--sub)">${x.passN}/${x.total}</small></td>
@@ -549,7 +576,7 @@ function renderScreen(){
     const x=results[+tr.dataset.i],L=x.latest,cols=tr.children.length,d=document.createElement('tr');d.className='detail';
     const cur=v=>v==null?'－':x.US?'$'+(+v).toLocaleString('en-US',{maximumFractionDigits:2}):yen(v)+'円', big=v=>v==null?'－':x.US?'$'+(v/1e9).toFixed(1)+'B':man(v);
     d.innerHTML=`<td colspan="${cols}">最新 ${esc(L.year)}　株価 ${cur(x.price)}${x.US?`（${yen(x.m.pj)}円）`:''}　1株配当 ${cur(x.m.dps)}　EPS ${cur(L.eps)}　営業利益率 ${pct(x.m.opm)}　${x.US?`返済年数 ${x.m.debtY==null?'－':x.m.debtY.toFixed(1)+'年'}　自己資本比率 ${pct(x.m.equity)}`:`自己資本比率 ${pct(x.m.equity)}`}<br>
-      売上高 ${x.g.years.map(y=>big(y.sales)).join(' → ')}<br>配当 ${x.g.years.map(y=>y.dps==null?'－':x.US?'$'+y.dps:y.dps).join(' → ')}${x.g.suspect?'<br><span class="warn">記念配当・データ異常の疑いがあるため、自動ポートフォリオから除外しています。IRで確認してください。</span>':''}</td>`;
+      売上高 ${x.g.years.map(y=>big(y.sales)).join(' → ')}<br>${crisisText(x)}配当 ${x.g.years.map(y=>y.dps==null?'－':x.US?'$'+y.dps:y.dps).join(' → ')}${x.g.suspect?'<br><span class="warn">記念配当・データ異常の疑いがあるため、自動ポートフォリオから除外しています。IRで確認してください。</span>':''}</td>`;
     tr.after(d);});
 }
 
@@ -570,7 +597,8 @@ function tierSet(cfg){if(!cfg.tier)return null;const s=STRATS.find(x=>x.id===cfg
   const v=new Set(screenAll(cfgFromStrat(s)).filter(x=>x.ok).map(x=>x.g.code));tierSet._k=k;tierSet._v=v;return v;}
 function pickTop(c,cfg,cu){const N=cfg.maxStocks||40;if(c.length<=N)return;
   const ts=tierSet(cfg);
-  const sc=o=>(ts&&ts.has(o.x.g.code)?20000:0)+o.x.passN*1000+(cfg.held&&cfg.held.has(cfg.normCode(o.x.g.code))?500:0)+o.w*(o.x.m.yield||0), sorted=[...c].sort((a,b)=>sc(b)-sc(a));
+  const cb=o=>o.x.m.crisis==null?100:Math.min(100,o.x.m.crisis)*2;   // 危機での配当維持率（記録なしは中間扱い）
+  const sc=o=>(ts&&ts.has(o.x.g.code)?20000:0)+o.x.passN*1000+cb(o)+(cfg.held&&cfg.held.has(cfg.normCode(o.x.g.code))?500:0)+o.w*(o.x.m.yield||0), sorted=[...c].sort((a,b)=>sc(b)-sc(a));
   const perSec=Math.max(1,Math.ceil(N*(cfg.capSector||100)/100)), cnt={}, out=[];
   for(const o of sorted){if(out.length>=N)break;const k=o.x.g.sector;if((cnt[k]||0)>=perSec)continue;cnt[k]=(cnt[k]||0)+1;out.push(o);}
   for(const o of sorted){if(out.length>=N)break;if(!out.includes(o))out.push(o);}   // 業種が足りない時は残りから補う
@@ -590,7 +618,7 @@ function buildPF(res,cfg,B,lotMode,opt={}){
     const items=[...jp.items,...add],inv=jp.invested+spent,dv=items.reduce((a,o)=>a+o.div,0);
     return {...jp,items,invested:inv,div:dv,divN:items.reduce((a,o)=>a+o.nisa,0),divT:items.reduce((a,o)=>a+o.taxd,0),
       yield:inv?dv/inv*100:0,left:B-inv,B,usAmt:spent,etfN:add.length,sectors:jp.sectors+(add.length?1:0),
-      dg:avg(items.map(o=>o.x.m.dg)),warn:jp.warn&&jp.cand<cfg.minStocks?`日本株部分：${jp.warn}`:''};
+      dg:median(items.map(o=>o.x.m.dg)),warn:jp.warn&&jp.cand<cfg.minStocks?`日本株部分：${jp.warn}`:''};
   }
   const scope=mode==='stock'?'all':'JP';
   const cs=cfg.capStock/100,cz=cfg.capSector/100,cu=scope==='US'?1:scope==='JP'?0:(cfg.capUS??40)/100;
@@ -598,7 +626,7 @@ function buildPF(res,cfg,B,lotMode,opt={}){
     .map(x=>({x,w:weight(x,cfg.method)*(tierSet(cfg)&&tierSet(cfg).has(x.g.code)?2:1),t:0,sh:0}));
   pickTop(c,cfg,scope==='all'?cu:0);
   const nPass=res.filter(x=>x.ok&&x.m.pj>0&&(scope==='all'||x.g.cc===scope)).length;
-  const empty={items:[],invested:0,div:0,divN:0,divT:0,yield:0,left:B,B,cand:nPass,lot:100,warn:'',usAmt:0,etfN:0,sectors:0};
+  const empty={items:[],invested:0,div:0,divN:0,divT:0,yield:0,left:B,B,cand:nPass,lot:lotMode==='100'?100:lotMode==='auto'?null:1,warn:'',usAmt:0,etfN:0,sectors:0};
   if(!c.length||!B)return empty;
   const jp=c.filter(o=>!o.x.US);
   let lot=lotMode==='auto'?100:(+lotMode||100);
@@ -639,7 +667,7 @@ function buildPF(res,cfg,B,lotMode,opt={}){
   const inv=items.reduce((a,o)=>a+o.amt,0),dv=items.reduce((a,o)=>a+o.div,0);
   const sectors=new Set(items.map(o=>o.x.g.sector)).size, usAmt=items.filter(o=>o.x.US).reduce((a,o)=>a+o.amt,0);
   let warn=''; if(items.length<cfg.minStocks)warn=`目安${cfg.minStocks}銘柄に対し${items.length}銘柄。`+(nPass<cfg.minStocks?'合格銘柄が足りません。条件をゆるめるか、投資対象に米国株を加えると増えます。':'予算に対して株価が高い銘柄が多いため、1株単位に切り替えると分散できます。');
-  return {cand:nPass,items,invested:inv,div:dv,divN:items.reduce((a,o)=>a+o.nisa,0),divT:items.reduce((a,o)=>a+o.taxd,0),etfN:0,yield:inv?dv/inv*100:0,left:B-inv,B,lot,sectors,warn,usAmt,dg:avg(items.map(o=>o.x.m.dg))};
+  return {cand:nPass,items,invested:inv,div:dv,divN:items.reduce((a,o)=>a+o.nisa,0),divT:items.reduce((a,o)=>a+o.taxd,0),etfN:0,yield:inv?dv/inv*100:0,left:B-inv,B,lot,sectors,warn,usAmt,dg:median(items.map(o=>o.x.m.dg))};
 }
 let pf=null,stratPFs=[],recId=null;
 function renderPF(){
@@ -649,9 +677,9 @@ function renderPF(){
   const opt={mode:hasUS?$('#usMode').value:'none',etfPick:$('#etfPick').value,tax};
   const rows=STRATS.map(s=>{const cfg=cfgFromStrat(s);const p=buildPF(screenAll(cfg),cfg,B,lotMode,opt);return {s,p};});
   stratPFs=rows; const fc=forecastAll(rows); recId=fc.best;
-  $('#cmpTable').innerHTML=`<thead><tr><th class="l">戦略</th><th>合格</th><th>組入</th><th>業種</th><th>配分率</th>${hasUS?'<th>米国比率</th>':''}<th>利回り</th><th>年間配当（税引後）</th><th>平均増配率</th><th>単位</th></tr></thead><tbody>`+
-    rows.map(({s,p})=>`<tr class="${s.id===stratId?'':'dim'}" data-s="${s.id}" style="cursor:pointer"><td class="l name">${esc(s.nm)}${s.id===recId?'<span class="badge">推奨</span>':''}<small>${esc(s.tag)}</small></td><td>${p.cand}</td><td>${p.items.length}</td><td>${p.sectors||0}</td><td class="${p.invested<B*0.9?'warn':''}">${B?pct(p.invested/B*100,0):'－'}</td>${hasUS?`<td>${p.invested?pct(p.usAmt/p.invested*100,0):'－'}</td>`:''}
-      <td>${pct(p.yield,2)}</td><td>${man(netNow(p,B,tax))}</td><td>${pct(p.dg,1)}</td><td>${p.lot}株${p.etfN?'<small>＋ETF</small>':hasUS&&p.usAmt&&p.lot!==1?'<small>米国は1株</small>':''}</td></tr>`).join('')+'</tbody>';
+  $('#cmpTable').innerHTML=`<thead><tr><th class="l">戦略</th><th>合格</th><th>組入</th><th>業種</th><th>配分率</th>${hasUS?'<th>米国比率</th>':''}<th>利回り</th><th>年間配当（税引後）</th><th>増配率（中央値）</th><th>単位</th></tr></thead><tbody>`+
+    rows.map(({s,p})=>`<tr class="${s.id===stratId?'':'dim'}" data-s="${s.id}" style="cursor:pointer"><td class="l name">${esc(s.nm)}${s.id===recId?'<span class="badge">推奨</span>':''}<small>${p.cand===0?`<span class="warn">${esc(whyZero(s))}</span>`:esc(s.tag)}</small></td><td>${p.cand}</td><td>${p.items.length}</td><td>${p.sectors||0}</td><td class="${p.invested<B*0.9?'warn':''}">${B?pct(p.invested/B*100,0):'－'}</td>${hasUS?`<td>${p.invested?pct(p.usAmt/p.invested*100,0):'－'}</td>`:''}
+      <td>${pct(p.yield,2)}</td><td>${man(netNow(p,B,tax))}</td><td>${pct(p.dg,1)}</td><td>${!p.items.length?'－':(p.items.some(o=>!o.x.etf)?`${p.lot}株`:'')+(p.etfN?(p.items.some(o=>!o.x.etf)?'<small>＋ETF</small>':'ETFのみ'):hasUS&&p.usAmt&&p.lot!==1?'<small>米国は1株</small>':'')}</td></tr>`).join('')+'</tbody>';
   $('#cmpTable').querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>{applyStrat(tr.dataset.s);runAll();});
   $('#strats').innerHTML=STRATS.map(s=>`<button class="strat ${s.id===stratId?'on':''}" data-s="${s.id}"><b>${esc(s.nm)}</b><span>${esc(s.desc)}</span></button>`).join('');
   $('#strats').querySelectorAll('.strat').forEach(b=>b.onclick=()=>{applyStrat(b.dataset.s);runAll();});
@@ -665,6 +693,9 @@ function renderPF(){
     <div class="kpi"><b>${pct(pf.yield,2)}</b><span>ポートフォリオ利回り</span></div>
     ${ts?(()=>{const st2=pf.items.filter(o=>!o.x.etf),a=st2.reduce((s,o)=>s+o.amt,0),l=st2.filter(o=>ts.has(o.x.g.code)).reduce((s,o)=>s+o.amt,0);
       return `<div class="kpi"><b>${a?pct(l/a*100,0):'－'}</b><span>株のうちリベ大基準の比率（${st2.filter(o=>ts.has(o.x.g.code)).length}/${st2.length}銘柄）</span></div>`;})():''}
+    ${(()=>{const hw=pf.items.filter(o=>o.x.m&&o.x.m.crisis!=null),a=hw.reduce((s2,o)=>s2+o.amt,0);if(!a)return '';
+      const v=hw.reduce((s2,o)=>s2+o.amt*Math.min(100,o.x.m.crisis),0)/a;
+      return `<div class="kpi"><b>${pct(v,0)}</b><span>過去の危機での配当維持率（リーマン・コロナ、金額加重・${hw.length}銘柄）</span></div>`;})()}
     <div class="kpi"><b>${pf.items.length}</b><span>組入銘柄 / ${pf.sectors}業種（候補 ${pf.cand}）${pf.usAmt?`<br>米国${pf.etfN?'ETF':''} ${pct(pf.usAmt/pf.invested*100,0)}`:''}</span></div>`;
   if(pf.invested<B*0.9&&!pf.warn)pf.warn=`予算の${Math.round(pf.invested/B*100)}%しか配分できていません。1銘柄・1業種の上限か合格銘柄数が制約になっています。`;
   const sec={};pf.items.forEach(o=>sec[o.x.g.sector]=(sec[o.x.g.sector]||0)+o.amt);const ss=Object.entries(sec).sort((a,b)=>b[1]-a[1]);
@@ -739,7 +770,10 @@ function pfTraits(p){
   const secs={};it.forEach(o=>secs[o.x.g.sector]=(secs[o.x.g.sector]||0)+w(o));
   const hhi=Object.values(secs).reduce((a,v)=>a+v*v,0);
   const nEff=it.reduce((a,o)=>a+(o.x.etf?30:1),0);   // ETF1本は数十社に分散済みとみなす
-  return {dg,q,n:it.length,nEff,hhi};
+  // 過去の危機（リーマン・コロナのうち悪い方）で実際に配当がどれだけ減ったか（金額加重）
+  const hw=it.filter(o=>o.x.m.crisis!=null),hsum=hw.reduce((a,o)=>a+w(o),0);
+  const histCut=hsum?hw.reduce((a,o)=>a+w(o)*(1-Math.min(1,o.x.m.crisis/100)),0)/hsum:null;
+  return {dg,q,n:it.length,nEff,hhi,histCut,histCov:hsum};
 }
 function forecastAll(rows){
   const B=clampNum($('#budget').value,0,1e11,0),{mo,tax,re}=simInputs(),reg=judgeRegime(),P=REG[reg.id].p;
@@ -747,7 +781,8 @@ function forecastAll(rows){
     const tr=pfTraits(p); if(!tr||!p.invested) return {s,p,ok:false};
     const y0=p.div/p.invested, yB=B>0?p.div/B:0, us=p.usAmt/p.invested, gBase=(0.5*tr.dg+0.5*2)/100;                        // 過去の増配率を2%へ半分寄せる
     const cut=Math.min(0.5,0.03+0.30*(1-tr.q)+0.15/Math.sqrt(tr.nEff)+0.10*Math.max(0,tr.hhi-0.1)); // 財務が弱い・銘柄が少ない・業種が偏るほど深い減配
-    const cutAll=1-(1-cut)*(1-us*0.15);   // 不況時は円高で米国株の円換算配当が15%目減りする想定
+    const cutMix=tr.histCut!=null&&tr.histCov>=0.5?0.5*cut+0.5*Math.min(0.6,tr.histCut):cut;   // 過去の実績が半分以上の銘柄にあれば半々で混ぜる
+    const cutAll=1-(1-cutMix)*(1-us*0.15);   // 不況時は円高で米国株の円換算配当が15%目減りする想定
     const base={B,y0:yB,yNew:yB,years:10,mo,re,...netRates(p,tax),nisa:acctInfo()};   // 配分しきれなかった資金は配当ゼロの現金として扱う
     const sc=[project({...base,g:gBase+0.015}),project({...base,g:gBase}),project({...base,g:Math.max(gBase-0.01,-0.02),cutYear:3,cut:cutAll,slowYears:2,slowFactor:0.3})];
     const D10=sc.map(r=>r[9].D),C10=sc.map(r=>r[9].cum);
@@ -793,7 +828,7 @@ function renderForecast(fc){
     :`<div class="rec" style="border-color:var(--line);background:var(--paper)"><p>合格銘柄がなく比較できません。データを読み込むか条件を見直してください。</p></div>`;
   const ur=$('#useRec'); if(ur) ur.onclick=()=>{applyStrat(fc.best);runAll();};
   const P=REG[fc.reg.id].p;
-  $('#fcTable').innerHTML=`<thead><tr><th class="l">パターン</th><th>好況 ${Math.round(P[0]*100)}%</th><th>平常 ${Math.round(P[1]*100)}%</th><th>不況 ${Math.round(P[2]*100)}%</th><th>期待値</th><th>10年累計</th><th>想定増配</th><th>不況時の配当減</th></tr></thead><tbody>`+
+  $('#fcTable').innerHTML=`<thead><tr><th class="l">パターン</th><th>好況 ${Math.round(P[0]*100)}%</th><th>平常 ${Math.round(P[1]*100)}%</th><th>不況 ${Math.round(P[2]*100)}%</th><th>期待値</th><th>10年累計</th><th>想定増配</th><th>不況時の配当減<small>過去の危機の実績を反映</small></th></tr></thead><tbody>`+
     fc.out.map(o=>o.ok?`<tr><td class="l name">${esc(o.s.nm)}${o.s.id===fc.best?'<span class="badge">推奨</span>':''}<small>10年後の年間配当・税引後　配分率${Math.round(o.rate*100)}%${o.us>0?`・米国${Math.round(o.us*100)}%`:''}</small></td>
       <td>${man(o.D10[0])}</td><td>${man(o.D10[1])}</td><td>${man(o.D10[2])}</td><td><b>${man(o.ev)}</b></td><td>${man(o.evC)}</td><td>${pct(o.g*100,1)}</td><td>-${pct(o.cut*100,0)}</td></tr>`
       :`<tr class="dim"><td class="l name">${esc(o.s.nm)}<small>合格銘柄なし</small></td><td colspan="7" class="l">この条件を満たす銘柄がないため比較対象外</td></tr>`).join('')+'</tbody>';
@@ -826,15 +861,19 @@ function loadStore(){try{const d=JSON.parse(localStorage.getItem(STORE)||'{}');r
 function saveStore(){try{localStorage.setItem(STORE,JSON.stringify(st));return true;}catch(e){return false;}}
 let st=loadStore(); st.holdings=st.holdings&&typeof st.holdings==='object'?st.holdings:{}; st.nisaUsed=st.nisaUsed||{};
 const thisYear=()=>new Date().getFullYear();
+// 今月使えるお金＝今月の投資額＋（繰越を使う時は）前月までの残り
+const carryAmt=()=>Math.max(0,Math.round(+st.carry||0));
+const buyBudget=()=>clampNum($('#buyAmt').value,0,1e10,0)+($('#useCarry')&&$('#useCarry').checked?carryAmt():0);
 const normCode=c=>String(c||'').trim().toUpperCase().replace(/\.T$/,'').replace(/-/g,'.');   // BRK-B → BRK.B（データ側の表記に合わせる）
 function cleanHoldings(){for(const k of Object.keys(st.holdings)){const v=Math.floor(+st.holdings[k]);if(!(v>0))delete st.holdings[k];else st.holdings[k]=v;}}
 cleanHoldings();
 // 保有を貼り付けた文章から読む：各行からコードと株数を探す
-function parseHoldings(text){const out={};let bad=0,nisa=null;
+function parseHoldings(text){const out={};let bad=0,nisa=null,carry=null;
   String(text||'').split(/\r?\n/).forEach(raw=>{
     let line=raw.replace(/[０-９Ａ-Ｚ．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/"/g,' ').trim(); if(!line)return;
     if(line.startsWith('#')){   // バックアップのNISA行
-      const m=line.match(/(\d{4})年の使用額\s*(\d+)\s*\/\s*生涯残り\s*(\d+)/);if(m)nisa={year:+m[1],used:+m[2],left:+m[3]};return;}
+      const m=line.match(/(\d{4})年の使用額\s*(\d+)\s*\/\s*生涯残り\s*(\d+)/);if(m)nisa={year:+m[1],used:+m[2],left:+m[3]};
+      const cm=line.match(/繰越\s*(\d+)/);if(cm)carry=+cm[1];return;}
     // 日付（2024/03/15、2024年）や金額の一部を拾わないよう、前後の文字を確認
     const m=line.match(/(?:^|[^0-9A-Z\/.,])(\d{3}[0-9A-Z])(?![0-9A-Z\/.年月日:])/)||line.match(/(?:^|[^A-Za-z])([A-Z]{1,5}(?:[.\-][A-Z])?)(?![A-Za-z])/);
     if(!m){bad++;return;}
@@ -842,11 +881,11 @@ function parseHoldings(text){const out={};let bad=0,nisa=null;
     const n=rest.match(/(^|[\s,\t])(\d{1,7})(株|口)?(?=[\s,\t]|$)/);
     if(!n){bad++;return;}
     const code=normCode(m[1]); out[code]=(out[code]||0)+(+n[2]);});
-  return {out,bad,nisa};}
+  return {out,bad,nisa,carry};}
 function quoteMap(){const q={};results.forEach(x=>q[normCode(x.g.code)]=x);etfs.forEach(e=>q[normCode(e.code)]=etfItem(e));return q;}
 
-function buildBuy(){
-  const M=clampNum($('#buyAmt').value,0,1e10,0),K=clampNum($('#maxOrders').value,1,100,10),minO=clampNum($('#minOrder').value,0,1e7,0);
+function buildBuy(o={}){
+  const M=o.M??buyBudget(),K=clampNum($('#maxOrders').value,1,100,10),minO=clampNum($('#minOrder').value,0,1e7,0);
   const tax=clampNum($('#tax').value,0,60,20.315)/100,lotMode=$('#lot').value,mode=hasUS?$('#usMode').value:'none',pick=$('#etfPick').value;
   const q=quoteMap(),H=st.holdings,review=[];
   let heldVal=0,inactive=0;
@@ -862,8 +901,8 @@ function buildBuy(){
     else if(x.US&&mode==='none')out='米国部分を「使わない」にしているため、買い増しの対象外です。';
     if(out){review.push({code,sh,name:x.g.name,msg:out,val:v});inactive+=v;}}
   const T=Math.max(0,heldVal-inactive+M);
-  const cfg=cfgCurrent();cfg.held=new Set(Object.keys(H));cfg.normCode=normCode;
-  const target=buildPF(results,cfg,T,lotMode,{mode,etfPick:pick,tax});
+  const cfg=o.cfg||cfgCurrent();if(o.capUS!=null)cfg.capUS=o.capUS;cfg.held=new Set(Object.keys(H));cfg.normCode=normCode;
+  const target=buildPF(o.res||results,cfg,T,lotMode,{mode,etfPick:pick,tax});
   // 目標との差（不足額）
   // 条件は満たしているが、上位の銘柄を優先したため目標から外れた保有（売る必要はない）
   const inTarget=new Set(target.items.map(o=>normCode(o.x.g.code))),flagged=new Set(review.map(r=>r.code)),ts=tierSet(cfg);
@@ -910,6 +949,67 @@ function buildBuy(){
   const skipped=need.length-lines.length;
   return {M,T,orders,left,target,review,heldVal,skipped,affordable:need.length,noTarget:!target.items.length};
 }
+/* ---------- 設定ナビ：よくないポイントと、おすすめの組み合わせ ---------- */
+function stratCfg(s){const c=cfgFromStrat(s);return c;}
+function adviseBuy(b){
+  const items=[],M=b.M,nisa=$('#acct').value==='nisa',mode=hasUS?$('#usMode').value:'none';
+  const jpT=b.target.items.filter(o=>!o.x.etf),etfShare=b.target.invested?b.target.usAmt/b.target.invested:0;
+  const curS=STRATS.find(s=>s.id===stratId)||STRATS[0],cu=clampNum($('#capUS').value,0,100,30);
+  // 1) データ
+  const ds=dataMeta,st2=ds.stats;
+  if(ds.source==='yahoo_scan'||ds.source==='cache'||(ds.source==='jpx'||ds.source==='jpx_en')&&ds.count<300){
+    items.push({lv:'warn2',t:`データが十分に集まっていません（${ds.count}社）`,
+      x:`${ds.source==='yahoo_scan'?'日本取引所の銘柄一覧に接続できず、証券コードの総当たりで集めたため、取りこぼしがあります（銘柄名が英語なのもこのためです）。':ds.source==='cache'?'日本取引所に接続できず、前回の一覧で更新しています。':'集まった銘柄が通常より少なくなっています。'}${st2?`今回は一次選別を通った${st2.prefilter}社のうち${st2.saved}社を収録${st2.failed?`、${st2.failed}社は取得失敗`:''}。`:''}このままでも使えますが、候補が少ないぶん分散しにくくなります。${ds.source==='yahoo_scan'||ds.source==='cache'?'日本取引所公式のJ-Quants（無料）のAPIキーをGitHubに登録すると、確実に全銘柄を日本語名で取得できます（手順はREADME）。':'GitHubでデータ更新をもう一度実行すると改善することがあります。'}`,
+      btn:$('#runLink')&&$('#runLink').href&&$('#runLink').style.display!=='none'?{l:'GitHubでデータ更新を実行',href:$('#runLink').href}:null});}
+  // 2) お金が余る → 使い切れる組み合わせを試算
+  if(M>0&&b.left>Math.max(5000,M*0.1)){
+    const cands=[],cache={};
+    const caps=mode==='etf'&&etfs.length?[...new Set([cu,Math.min(50,cu+10),Math.min(50,cu+20)])]:[cu];
+    for(const s of STRATS)for(const c of caps){
+      const cfg=stratCfg(s);const res=cache[s.id]||(cache[s.id]=screenAll(cfg));
+      const bb=buildBuy({cfg,res,capUS:c,M});const n=bb.target.items.filter(o=>!o.x.etf).length;
+      const used=M-bb.left;cands.push({s,c,used,n,
+        score:used/M*100-Math.abs(c-cu)*0.4-(s.id===curS.id?0:3)-(n<10?15:0)-(s.id==='fortress'?2:0)});}
+    const best=cands.sort((a,b2)=>b2.score-a.score)[0],nowUsed=M-b.left;
+    const why=`今の戦略（${curS.nm}）では合格した日本株が${b.target.cand}社で、1銘柄${clampNum($('#capStock').value,0,100,5)}%・1業種${clampNum($('#capSector').value,0,100,15)}%の上限に達したため、${man(b.left)}を使い切れません。最低購入額を下げても、上限は変わらないので解決しません。`;
+    if(best&&best.used-nowUsed>=Math.max(5000,M*0.05)&&(best.s.id!==curS.id||best.c!==cu)){
+      items.push({lv:'info',t:`おすすめ：${best.s.nm}${best.c!==cu?`＋米国ETF ${best.c}%`:''}`,
+        x:`${why}この組み合わせなら今月 ${man(best.used)} を使えます（今は ${man(nowUsed)}）。日本株は${best.n}銘柄に分散し、分散のルールは守ったままです。`,
+        act:{l:'この設定にする',fn:()=>{applyStrat(best.s.id);$('#capUS').value=best.c;runAll();}}});
+    }else items.push({lv:'info',t:`${man(b.left)}は来月に繰り越されます`,x:why+'ほかの戦略やETFの割合でも大きくは改善しないため、残りは「保有に反映」を押すと翌月の投資額に自動で足されます。'});
+  }
+  // 3) 分散
+  if(jpT.length>0&&jpT.length<10&&b.target.etfN===0)items.push({lv:'warn2',t:`分散が足りません（日本株${jpT.length}銘柄）`,x:'1社の減配や業績悪化の影響が大きくなります。段階型かパターンAにすると、合格銘柄が増えて分散しやすくなります。',
+    act:stratId!=='hybrid'?{l:'段階型にする',fn:()=>{applyStrat('hybrid');runAll();}}:null});
+  // 4) 長期に向かない設定
+  const cs=clampNum($('#capStock').value,0,100,5),cz=clampNum($('#capSector').value,0,100,15);
+  if(cs>10||cz>30)items.push({lv:'warn2',t:'1銘柄・1業種の上限が大きすぎます',x:`今は1銘柄${cs}%・1業種${cz}%。長期の高配当投資では、1社の減配で全体が大きく崩れないよう、1銘柄5〜8%・1業種15〜20%が目安です。`,
+    act:{l:'戦略の標準値に戻す',fn:()=>{applyStrat(stratId);runAll();}}});
+  const K=clampNum($('#maxOrders').value,1,100,10),minO=clampNum($('#minOrder').value,0,1e7,0);
+  if(M>0&&minO>M/Math.max(3,K/2))items.push({lv:'warn2',t:'1件の最低購入額が高すぎます',x:`今月の投資額に対して最低購入額（${yen(minO)}円）が大きく、注文が数件しか出ません。3,000円前後がおすすめです。`,
+    act:{l:'3,000円にする',fn:()=>{$('#minOrder').value=3000;renderBuy();}}});
+  if(K<5)items.push({lv:'info',t:'注文数の上限が少なめです',x:`月${K}件だと、目標の配分に近づくまで時間がかかります。10件前後がおすすめです（S株なら手数料の負担は小さめです）。`,
+    act:{l:'10件にする',fn:()=>{$('#maxOrders').value=10;renderBuy();}}});
+  if(mode==='etf'&&etfShare>0.6&&nisa)items.push({lv:'info',t:`米国ETFの比率が高めです（${Math.round(etfShare*100)}%）`,x:'NISAでは米国ETFの配当に現地の税金10%がかかったままです。非課税の効果が大きいのは日本株なので、ETFは30〜40%程度がおすすめです。'});
+  if(carryAmt()>Math.max(M,1)*1.5)items.push({lv:'warn2',t:`繰越が ${man(carryAmt())} まで増えています`,x:'使い切れないお金が毎月たまっています。上の「おすすめ」の設定に切り替えるか、ETFの割合を上げると使い切れます。'});
+  if(nisa&&M>0){const room=NISA_YEAR-clampNum($('#nisaUsed').value,0,NISA_YEAR,0);if(M>room)items.push({lv:'info',t:`今年のNISA成長枠は残り ${man(Math.max(0,room))}`,x:'枠を超えた分は、リストで「特定」と表示され、課税口座での購入になります。'});}
+  if(!Object.keys(st.holdings).length&&b.orders.length)items.push({lv:'info',t:'はじめての方へ',x:'①下のリストどおりにSBI証券で注文（S株・預り区分はNISA）→ ②「注文した分を保有に反映」を押す。これだけで、翌月は続きから計算されます。'});
+  if(!items.some(i=>i.lv==='warn2'||i.act))items.unshift({lv:'good',t:'設定は長期の高配当投資に合っています',x:`日本株${jpT.length}銘柄${b.target.etfN?`＋米国ETF${b.target.etfN}本`:''}に分散し、今月は ${man(M-b.left)} を使います。`});
+  return items;}
+function renderNavi(b){
+  // 大事な順：警告 → ボタン付きのおすすめ → その他。1件目だけ開き、残りは折りたたむ（スマホでリストが隠れないように）
+  const rank=it=>it.lv==='warn2'?0:it.act?1:it.lv==='info'?2:3;
+  const items=adviseBuy(b).map((it,i)=>({...it,_i:i})).sort((a2,b2)=>rank(a2)-rank(b2)||a2._i-b2._i),box=$('#naviBox');
+  const one=(it,i)=>`<div class="item ${it.lv}"><b>${esc(it.t)}</b>${esc(it.x)}${it.act?`<br><button class="btn" data-navi="${i}">${esc(it.act.l)}</button>`:''}${it.btn?`<br><a class="btn ghost" href="${esc(it.btn.href)}" target="_blank" rel="noopener">${esc(it.btn.l)}</a>`:''}</div>`;
+  const open=box.querySelector('details')&&box.querySelector('details').open;
+  // 常に開いて見せる：1件目と、ボタンで解決できる案内（2件まで）
+  const acts=items.map((it,i)=>it.act?i:-1).filter(i=>i>=0).slice(0,2),shown=new Set([0,...acts]),rest=items.map((it,i)=>i).filter(i=>!shown.has(i));
+  box.innerHTML=[...shown].sort((a2,b2)=>a2-b2).map(i=>one(items[i],i)).join('')+(rest.length?`<details${open?' open':''}><summary style="cursor:pointer;font-size:13px;color:var(--sub)">ほかの案内 ${rest.length}件${rest.some(i=>items[i].lv==='warn2')?'（注意あり）':''}</summary>${rest.map(i=>one(items[i],i)).join('')}</details>`:'');
+  box.querySelectorAll('button[data-navi]').forEach(bt=>bt.onclick=()=>{items[+bt.dataset.navi].act.fn();});
+  const np=$('#naviPanel'),lp=$('#buyTable').closest('.panel'),kp=$('#buyKpi');
+  const urgent=items.some(i=>i.lv==='warn2'||i.act);   // 注意やおすすめがある時だけリストの上に出す
+  if(!urgent){if(np.previousElementSibling!==lp)lp.after(np);}else if(np.previousElementSibling!==kp)kp.after(np);}
+
 let lastBuy=null;
 function renderBuy(){
   if(!companies.length)return;
@@ -917,14 +1017,15 @@ function renderBuy(){
   $('#buySetSum').textContent=`今月 ${man(clampNum($('#buyAmt').value,0,1e10,0))}・注文${clampNum($('#maxOrders').value,1,100,10)}件まで・1件${yen(clampNum($('#minOrder').value,0,1e7,0))}円以上${$('#acct').value==='nisa'?`・今年のNISA使用 ${man(clampNum($('#nisaUsed').value,0,NISA_YEAR,0))}`:''}`;
   $('#buyStrat').textContent=(STRATS.find(s=>s.id===stratId)||{}).nm||'';
   const bts=tierSet(cfgCurrent());
+  $('#carryLbl').textContent=`${man(carryAmt())}を今月に足す`;
   const b=lastBuy=buildBuy(),sumA=b.orders.reduce((a,o)=>a+o.amt,0),nisaA=b.orders.filter(o=>o.acct==='NISA').reduce((a,o)=>a+o.amt,0);
   const nisa=$('#acct').value==='nisa',roomYear=NISA_YEAR-clampNum($('#nisaUsed').value,0,NISA_YEAR,0);
-  $('#buyKpi').innerHTML=`<div class="kpi gold"><b>${man(sumA)}</b><span>今月の買付（${new Set(b.orders.map(o=>o.o.x.g.code)).size}銘柄）</span></div>
+  $('#buyKpi').innerHTML=`<div class="kpi gold"><b>${man(sumA)}</b><span>今月の買付（${new Set(b.orders.map(o=>o.o.x.g.code)).size}銘柄）${$('#useCarry').checked&&carryAmt()?`<br>繰越 ${man(carryAmt())} を含む`:''}</span></div>
     <div class="kpi"><b>${man(b.left)}</b><span>使わずに残る額</span></div>
-    ${nisa?`<div class="kpi"><b>${man(nisaA)}</b><span>うちNISA（今年の残り ${man(Math.max(0,roomYear-nisaA))}）</span></div>`:''}
-    <div class="kpi"><b>${man(b.heldVal)}</b><span>今の保有額（${Object.keys(st.holdings).length}銘柄）</span></div>
+    ${nisa?`<div class="kpi minor"><b>${man(nisaA)}</b><span>うちNISA（今年の残り ${man(Math.max(0,roomYear-nisaA))}）</span></div>`:''}
+    <div class="kpi minor"><b>${man(b.heldVal)}</b><span>今の保有額（${Object.keys(st.holdings).length}銘柄）</span></div>
     ${bts?(()=>{const q=quoteMap();let a=0,l=0;for(const [c,n] of Object.entries(st.holdings)){const x=q[c];if(!x||x.etf||!(x.m.pj>0))continue;a+=n*x.m.pj;if(bts.has(x.g.code))l+=n*x.m.pj;}
-      return a?`<div class="kpi"><b>${pct(l/a*100,0)}</b><span>保有株のうちリベ大基準の比率</span></div>`:'';})():''}`;
+      return a?`<div class="kpi minor"><b>${pct(l/a*100,0)}</b><span>保有株のうちリベ大基準の比率</span></div>`:'';})():''}`;
   if(!b.orders.length){
     $('#buyTable').innerHTML=`<tr><td class="empty">${b.noTarget?'今の戦略では合格銘柄がありません。別の戦略を選ぶか、条件をゆるめてください。':b.M<=0?'今月の投資額を入れてください。':!b.affordable?'不足している銘柄がないか、1株の価格が今月の投資額を超えています。今月は見送り、翌月にまとめて買う形でも問題ありません。':'最低購入額を下げると注文が出ます。'}</td></tr>`;
     $('#buyText').value='';$('#applyBuy').disabled=true;
@@ -937,12 +1038,13 @@ function renderBuy(){
     $('#applyBuy').disabled=false;}
   const bm=$('#buyMsg');
   const idle=b.M>0&&b.left>Math.max(10000,b.M*0.1)&&b.skipped<=0;
-  bm.className='msg'+(idle?' err':'');bm.textContent=idle?`${man(b.left)}が残ります。今の戦略では合格銘柄が少なく、1銘柄・1業種の上限まで買い終えています。パターンAに切り替えるか、条件を1つゆるめると使い切れます。`:b.orders.length&&b.skipped>0?`不足している銘柄はほかに${b.skipped}件あります。注文数の上限（${clampNum($('#maxOrders').value,1,100,10)}件）の範囲で不足の大きい順に選んでいるので、翌月以降に順番に回ります。`:'';
+  bm.className='msg';bm.textContent=idle?`${man(b.left)}が残ります。理由とおすすめは上の「設定ナビ」をご覧ください。`:b.orders.length&&b.skipped>0?`不足している銘柄はほかに${b.skipped}件あります。注文数の上限（${clampNum($('#maxOrders').value,1,100,10)}件）の範囲で不足の大きい順に選んでいるので、翌月以降に順番に回ります。`:'';
   $('#undoBuy').disabled=!st.last;
   $('#reviewPanel').style.display=b.review.length?'':'none';
   const nInfo=b.review.filter(r=>r.info).length;
   $('#reviewBox').innerHTML=b.review.filter(r=>!r.info).map(r=>`<p class="msg err" style="margin:0 0 8px"><b>${esc(r.name||r.code)}（${esc(r.code)}・${r.sh}株）</b><br>${esc(r.msg)}</p>`).join('')+
     (nInfo?`<details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">買い増しを止めている保有 ${nInfo}銘柄（売る必要なし）</summary>${b.review.filter(r=>r.info).map(r=>`<p class="msg" style="margin:6px 0 0"><b>${esc(r.name||r.code)}（${esc(r.code)}・${r.sh}株）</b><br>${esc(r.msg)}</p>`).join('')}</details>`:'');
+  renderNavi(b);
   renderHold();
 }
 function renderHold(){const q=quoteMap(),H=st.holdings,codes=Object.keys(H).sort();
@@ -961,19 +1063,22 @@ function initBuy(){
   $('#nisaUsed').value=st.nisaUsed[thisYear()]||0;
   if(st.strat&&STRATS.some(s=>s.id===st.strat))applyStrat(st.strat);
   $('#buyAmt').value=$('#monthly').value;
+  $('#useCarry').addEventListener('change',()=>renderBuy());
   ['buyAmt','maxOrders','minOrder'].forEach(id=>$('#'+id).addEventListener('input',()=>{clearTimeout(renderBuy._t);renderBuy._t=setTimeout(renderBuy,150);}));
   $('#nisaUsed').addEventListener('change',()=>{st.nisaUsed[thisYear()]=Math.round(clampNum($('#nisaUsed').value,0,NISA_YEAR,0));saveStore();renderBuy();});
   $('#nisaLeft').addEventListener('change',()=>{st.nisaLeft=Math.round(clampNum($('#nisaLeft').value,0,12e6,12e6));saveStore();});
   $('#applyBuy').onclick=()=>{const b=lastBuy;if(!b||!b.orders.length)return;
     const add={};let nisaA=0;b.orders.forEach(o=>{const c=normCode(o.o.x.g.code);add[c]=(add[c]||0)+o.n;if(o.acct==='NISA')nisaA+=o.amt;});
-    st.last={add,nisaA:Math.round(nisaA),at:new Date().toISOString(),year:thisYear()};
+    const usedCarry=$('#useCarry').checked;st.last={carryBefore:carryAmt(),add,nisaA:Math.round(nisaA),at:new Date().toISOString(),year:thisYear()};
     Object.entries(add).forEach(([c,n])=>st.holdings[c]=(st.holdings[c]||0)+n);
+    st.carry=Math.max(0,Math.round(b.left)+(usedCarry?0:carryAmt()));   // 使い切れなかった分は翌月へ
     if(nisaA>0){st.nisaUsed[thisYear()]=Math.round((st.nisaUsed[thisYear()]||0)+nisaA);$('#nisaUsed').value=st.nisaUsed[thisYear()];
       st.nisaLeft=Math.round(Math.max(0,clampNum($('#nisaLeft').value,0,12e6,12e6)-nisaA));$('#nisaLeft').value=st.nisaLeft;}
     const ok=saveStore();renderPF();renderSim();renderBuy();
     const m=$('#buyMsg');m.className='msg '+(ok?'ok':'err');m.textContent=ok?`${Object.keys(add).length}銘柄を保有に反映しました${nisaA?`（NISA ${man(nisaA)}）`:''}。来月はこの続きから計算します。`:'反映しましたが、このブラウザでは保存ができません（プライベートモード等）。バックアップを書き出しておいてください。';};
   $('#undoBuy').onclick=()=>{const l=st.last;if(!l)return;
     Object.entries(l.add).forEach(([c,n])=>{st.holdings[c]=(st.holdings[c]||0)-n;});cleanHoldings();
+    if(l.carryBefore!=null)st.carry=l.carryBefore;
     if(l.nisaA>0){st.nisaUsed[l.year]=Math.round(Math.max(0,(st.nisaUsed[l.year]||0)-l.nisaA));if(l.year===thisYear())$('#nisaUsed').value=st.nisaUsed[l.year];
       st.nisaLeft=Math.round(Math.min(12e6,clampNum($('#nisaLeft').value,0,12e6,12e6)+l.nisaA));$('#nisaLeft').value=st.nisaLeft;}
     st.last=null;saveStore();renderPF();renderSim();renderBuy();const m=$('#buyMsg');m.className='msg ok';m.textContent='直前の反映を取り消しました。';};
@@ -984,17 +1089,17 @@ function initBuy(){
     if(!(n>=0)){holdMsg('株数を入れてください（0で削除）。',false);return;}
     if(n>0)st.holdings[c]=n;else delete st.holdings[c];saveStore();$('#addCode').value='';$('#addSh').value='';
     holdMsg(`${c} を${n>0?n+'株に':'削除'}しました。`,true);renderBuy();};
-  $('#importHold').onclick=()=>{const {out,bad,nisa}=parseHoldings($('#holdText').value);const n=Object.keys(out).length;
+  $('#importHold').onclick=()=>{const {out,bad,nisa,carry}=parseHoldings($('#holdText').value);const n=Object.keys(out).length;
     if(!n){holdMsg('コードと株数を読み取れませんでした。1行に「8058 30」の形で入れてください。',false);return;}
-    st.holdings=out;cleanHoldings();st.last=null;
+    st.holdings=out;cleanHoldings();st.last=null;if(carry!=null)st.carry=carry;
     if(nisa){st.nisaUsed[nisa.year]=nisa.used;st.nisaLeft=Math.min(12e6,nisa.left);$('#nisaLeft').value=st.nisaLeft;if(nisa.year===thisYear())$('#nisaUsed').value=nisa.used;}
     saveStore();renderPF();renderSim();renderBuy();holdMsg(`${n}銘柄を読み込みました${nisa?'（NISAの使用額・残りも復元）':''}${bad?`（読めなかった行 ${bad}件）`:''}。`,true);};
   $('#exportHold').onclick=()=>{$('#holdText').value=Object.entries(st.holdings).map(([c,n])=>`${c} ${n}`).join('\n')+
-    `\n# NISA ${thisYear()}年の使用額 ${Math.round(st.nisaUsed[thisYear()]||0)} / 生涯残り ${Math.round(clampNum($('#nisaLeft').value,0,12e6,12e6))}`;
+    `\n# NISA ${thisYear()}年の使用額 ${Math.round(st.nisaUsed[thisYear()]||0)} / 生涯残り ${Math.round(clampNum($('#nisaLeft').value,0,12e6,12e6))}\n# 繰越 ${carryAmt()}`;
     holdMsg('上の欄に書き出しました。コピーしてメモ帳などに保存してください。',true);};
   $('#clearHold').onclick=()=>{if($('#clearHold').dataset.arm!=='1'){$('#clearHold').dataset.arm='1';$('#clearHold').textContent='もう一度押すと消去';
       setTimeout(()=>{$('#clearHold').dataset.arm='';$('#clearHold').textContent='保有をすべて消す';},4000);return;}
-    st.holdings={};st.last=null;saveStore();$('#clearHold').dataset.arm='';$('#clearHold').textContent='保有をすべて消す';renderBuy();holdMsg('保有を消しました。',true);};
+    st.holdings={};st.last=null;st.carry=0;saveStore();$('#clearHold').dataset.arm='';$('#clearHold').textContent='保有をすべて消す';renderBuy();holdMsg('保有を消しました。',true);};
 }
 
 /* ---------- flow ---------- */
@@ -1026,7 +1131,7 @@ async function loadAuto(silent){const msg=$('#autoMsg');
     const us0={cache:'JPXに接続できなかったため、前回の銘柄一覧で更新しています。',yahoo_scan:'JPXに接続できなかったため、証券コードの総当たりで銘柄を集めています（銘柄名は英語、業種は大分類）。',jpx_en:'JPXの英語版一覧を使ったため、銘柄名は英語表記です。'}[d.universe_source];
     if(us0)ds.textContent+='　※'+us0;
     const my=d.min_yield??2.5;msg.textContent=`${d.updated||'日時不明'} 更新：${n}銘柄を読み込みました（日本株は利回り${my}%以上${d.min_yield_us!=null?`、米国株は${d.min_yield_us}%以上`:''}）。`;
-    $('#autoLead').textContent=`最終更新 ${d.updated||'日時不明'}。プライム・スタンダードの全銘柄${d.min_yield_us!=null?'とS&P500採用の米国株':''}から、高配当の候補を自動抽出しています。`;
+    $('#autoLead').textContent=`最終更新 ${d.updated||'日時不明'}。日本の上場株すべて（プライム・スタンダード・グロース）${d.min_yield_us!=null?'とS&P500採用の米国株':''}から、高配当の候補を自動抽出しています。`;
     setTimeout(()=>show(Object.keys(st.holdings).length?'buy':'pf'),400);}
   catch(e){msg.className='msg err';msg.textContent='自動データを読み込めませんでした（'+e.message+'）。GitHub Pagesで開いているか確認するか、下のCSV読込か「サンプルデータで試す」を使ってください。';}}
 $('#autoBtn').onclick=()=>loadAuto(false);
@@ -1052,7 +1157,7 @@ $('#sampleBtn').onclick=()=>{ // 架空の企業データ（動作確認用）
   loaded(t,'サンプル（架空の36社＋仮のETF）');
 };
 ['allowDown','needPass','ccFilter','fx','acct','usMode','etfPick','nisaLeft'].forEach(id=>{$('#'+id).addEventListener('input',runAll);$('#'+id).addEventListener('change',runAll);});
-['budget','lot','capStock','capSector','method','minStocks','monthly','target','growth','tax','reinvest','storeCost','storeProfit','regime','capUS','maxStocks'].forEach(id=>{const el=$('#'+id);const h=()=>{clearTimeout(el._t);el._t=setTimeout(()=>{if(companies.length){renderPF();renderSim();}},150);};el.addEventListener('input',h);el.addEventListener('change',h);});
+['budget','lot','capStock','capSector','method','minStocks','monthly','target','growth','tax','reinvest','storeCost','storeProfit','regime','capUS','maxStocks'].forEach(id=>{const el=$('#'+id);const h=()=>{clearTimeout(el._t);el._t=setTimeout(()=>{if(companies.length){renderPF();renderSim();renderBuy();}},150);};el.addEventListener('input',h);el.addEventListener('change',h);});
 renderCrits();fillNeed();applyStrat('hybrid');syncModes();initBuy();loadAuto(true);
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)&&!/claude\.ai|claudeusercontent/.test(location.hostname)){
   window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}

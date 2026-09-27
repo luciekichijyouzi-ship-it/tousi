@@ -179,15 +179,77 @@ def _scan_universe() -> pd.DataFrame:
     return pd.DataFrame({"code": codes, "name": codes, "market": "東証", "sector": "", "need_info": True})
 
 
+JQUANTS_KEY = (os.getenv("JQUANTS_API_KEY") or "").strip()
+JQUANTS_MASTER = "https://api.jquants.com/v2/equities/master"
+
+
+def _jquants_universe():
+    """J-Quants API（JPX公式・無料プランあり）の上場銘柄一覧。APIキーがある時だけ使う"""
+    if not JQUANTS_KEY:
+        return None
+    today = dt.datetime.now(JST).date()
+    # 無料プランは12週間遅れのため、最新で取れなければ過去の日付で取り直す
+    for date in [None, (today - dt.timedelta(days=85)).isoformat(), (today - dt.timedelta(days=95)).isoformat()]:
+        rows, params, ok = [], ({"date": date} if date else {}), True
+        for page in range(50):
+            try:
+                r = requests.get(JQUANTS_MASTER, headers={"x-api-key": JQUANTS_KEY}, params=params, timeout=60)
+            except Exception as e:
+                log(f"J-Quants: 接続失敗 {str(e)[:150]}"); ok = False; break
+            log(f"J-Quants（日付 {date or '最新'}）: HTTP {r.status_code}")
+            if r.status_code == 429:
+                time.sleep(15); continue
+            if r.status_code != 200:
+                ok = False; break
+            try:
+                j = r.json()
+            except Exception:
+                ok = False; break
+            rows += j.get("data") or []
+            key = j.get("pagination_key")
+            if not key:
+                break
+            params = {**params, "pagination_key": key}
+            time.sleep(13)             # 無料プランは1分5回まで
+        if ok and len(rows) >= MIN_UNIVERSE:
+            break
+        rows = []
+    if not rows:
+        return None
+    df = pd.DataFrame(rows)
+    for c in ["Code", "CoName", "MktNm", "S33Nm"]:
+        if c not in df.columns:
+            log(f"J-Quants: 想定外の項目 {list(df.columns)[:20]}")
+            return None
+    df = df[df["Code"].astype(str).str.fullmatch(r"\d{3}[0-9A-Z]0")]          # 5桁の末尾0＝普通株
+    df = df.assign(code=df["Code"].astype(str).str[:4], name=df["CoName"], market=df["MktNm"].astype(str),
+                   sector=df["S33Nm"].astype(str).str.strip())
+    df = df[df["market"].apply(lambda m: any(k in m for k in MARKETS))]
+    df = df[~df["sector"].isin(["その他", "-", "", "nan"])]                    # ETF・REIT等は業種「その他」
+    return df[["code", "name", "market", "sector"]].drop_duplicates("code").reset_index(drop=True)
+
+
 def load_universe() -> pd.DataFrame:
     global UNIVERSE_SOURCE
     log("上場銘柄一覧を取得")
     df = None
+    if JQUANTS_KEY:
+        try:
+            df = _jquants_universe()
+        except Exception as e:
+            log(f"J-Quants: 読み込み失敗 {str(e)[:200]}")
+            df = None
+        if df is not None and len(df) >= MIN_UNIVERSE:
+            UNIVERSE_SOURCE = "jquants"
+            UNIVERSE_CACHE.write_text(df.to_json(orient="records", force_ascii=False))
+            log(f"J-Quantsから {len(df)} 銘柄を取得")
+        else:
+            df = None
     tries = [("JPX一覧", lambda: JPX_LIST, False),
              ("JPXページから一覧を探す", lambda: _find_link(JPX_PAGE, r'href="([^"]*data_j\.xlsx?)"', "JPXページ"), False),
              ("JPX英語版一覧", lambda: JPX_LIST_EN, True),
              ("JPX英語版ページから探す", lambda: _find_link(JPX_PAGE_EN, r'href="([^"]*data_e\.xlsx?)"', "JPX英語版ページ"), True)]
-    for label, url_fn, en in tries:
+    for label, url_fn, en in (tries if df is None else []):
         url = url_fn()
         if not url:
             continue
@@ -227,7 +289,9 @@ def fill_info(row):
     """総当たりで見つけた銘柄の名前・業種・種類をYahooから補う。普通株以外（ETF・REIT等）は None"""
     def get():
         return yf.Ticker(row["yft"]).info
-    info = retry(get, tries=2, base=5, label=f"{row['code']} 銘柄情報") or {}
+    info = retry(get, tries=2, base=5, label=f"{row['code']} 銘柄情報")
+    if not info:
+        return False          # 取得できなかった（最後に取り直す）
     if info.get("quoteType") not in (None, "EQUITY"):
         return None
     ind = str(info.get("industry") or "")
@@ -235,7 +299,9 @@ def fill_info(row):
         return None
     row = row.copy()
     row["name"] = info.get("shortName") or info.get("longName") or row["code"]
-    row["sector"] = YSECTOR_JA.get(info.get("sector"), info.get("sector") or "未分類")
+    big = YSECTOR_JA.get(info.get("sector"), info.get("sector") or "未分類")
+    row["sector"] = f"{big}・{ind}" if ind else big      # 大分類だけだと1業種の上限が効きすぎるため細分類まで
+    
     return row
 
 
@@ -264,31 +330,54 @@ def load_us_universe() -> pd.DataFrame:
 
 
 # ---------- 2. 株価＋直近1年配当（一括） ----------
-def load_prices_and_ttm(tickers):
+def _rate_limited_tickers():
+    """直前の一括取得で「アクセス制限」により失敗した銘柄（yfinanceが記録するエラーから判定）"""
+    errs = getattr(getattr(yf, "shared", None), "_ERRORS", None) or {}
+    return {t for t, e in errs.items() if any(k in str(e) for k in ("Rate", "rate", "Too Many", "429", "timed out", "Timeout"))}
+
+
+def _download_chunk(chunk, out, cutoff, label):
+    data = retry(lambda: yf.download(chunk, period="13mo", group_by="ticker", actions=True,
+                                     threads=True, progress=False, auto_adjust=False), label=label)
+    limited = _rate_limited_tickers() & set(chunk)
+    if data is None or data.empty:
+        return set(chunk) if data is None else limited
+    for t in chunk:
+        try:
+            d = data[t] if isinstance(data.columns, pd.MultiIndex) else data
+            close = d["Close"].dropna()
+            if close.empty:
+                continue
+            idx = d.index.tz_localize(None) if d.index.tz is not None else d.index
+            divs = d["Dividends"].fillna(0) if "Dividends" in d else pd.Series(0, index=d.index)
+            ttm = float(divs[idx >= cutoff].sum())
+            out[t] = {"price": float(close.iloc[-1]), "ttm": ttm}
+        except Exception:
+            pass
+    return limited
+
+
+def load_prices_and_ttm(tickers, retry_missing=True):
+    """一括取得。アクセス制限で取れなかった銘柄は、間を空けて小分けで取り直す"""
     log(f"株価と直近配当を一括取得（{len(tickers)}銘柄）")
     out = {}
     cutoff = pd.Timestamp.now(tz=None) - pd.Timedelta(days=365)
+    again = set()
     for i in range(0, len(tickers), 200):
-        chunk = tickers[i:i + 200]
-        data = retry(lambda: yf.download(chunk, period="13mo", group_by="ticker", actions=True,
-                                         threads=True, progress=False, auto_adjust=False),
-                     label=f"一括取得 {i}")
-        if data is None or data.empty:
-            continue
-        for t in chunk:
-            try:
-                d = data[t] if isinstance(data.columns, pd.MultiIndex) else data
-                close = d["Close"].dropna()
-                if close.empty:
-                    continue
-                idx = d.index.tz_localize(None) if d.index.tz is not None else d.index
-                divs = d["Dividends"].fillna(0) if "Dividends" in d else pd.Series(0, index=d.index)
-                ttm = float(divs[idx >= cutoff].sum())
-                out[t] = {"price": float(close.iloc[-1]), "ttm": ttm}
-            except Exception:
-                pass
+        again |= _download_chunk(tickers[i:i + 200], out, cutoff, f"一括取得 {i}")
         time.sleep(1.5)
-    log(f"株価取得 {len(out)} 銘柄")
+    for p, (size, wait) in enumerate([(50, 20), (20, 60)], start=1):
+        todo = sorted(again | ({t for t in tickers if t not in out} if retry_missing else set()))
+        todo = [t for t in todo if t not in out]
+        if not todo:
+            break
+        log(f"取り直し{p}回目：{len(todo)}銘柄（{wait}秒待ってから{size}件ずつ）")
+        time.sleep(wait)
+        again = set()
+        for i in range(0, len(todo), size):
+            again |= _download_chunk(todo[i:i + size], out, cutoff, f"取り直し{p} {i}")
+            time.sleep(3)
+    log(f"株価取得 {len(out)} / {len(tickers)} 銘柄")
     return out
 
 
@@ -319,7 +408,7 @@ def fetch_financials(code: str, yft: str = None):
 
     res = retry(get, tries=3, base=8, label=f"{code} 財務")
     if res is None:
-        return None
+        return False          # 通信・アクセス制限で取れなかった（最後にもう一度取り直す）
     inc, bs, cf, div = res
     if inc is None or inc.empty:
         return None
@@ -366,6 +455,81 @@ def fetch_financials(code: str, yft: str = None):
         return None
     cache.write_text(json.dumps({"fetched": dt.date.today().isoformat(), "years": years}, ensure_ascii=False))
     return years
+
+
+# ---------- 3a. 過去の危機（リーマン・コロナ）での配当と株価 ----------
+CRISIS_CACHE = CACHE_DIR / "crisis_v1.json"      # 過去の事実なので一度計算したら使い回す
+CRISES = {
+    # 名前: (配当の比較：危機前の年, 危機中の年, 株価：高値を見る期間, 下落を見る期間)
+    "lehman": ((2007, 2008), (2009, 2010), ("2007-01-01", "2008-08-31"), ("2008-09-01", "2009-12-31")),
+    "covid":  ((2018, 2019), (2020, 2021), ("2019-06-01", "2020-02-14"), ("2020-02-15", "2020-12-31")),
+}
+
+
+def crisis_metrics(close: pd.Series, div: pd.Series):
+    """1銘柄の危機の記録。上場前・無配などで判断できない危機は None"""
+    out = {}
+    if close is None or close.dropna().empty:
+        return None
+    close = close.dropna()
+    close.index = close.index.tz_localize(None) if close.index.tz is not None else close.index
+    div = (div if div is not None else pd.Series(dtype=float)).fillna(0)
+    div.index = div.index.tz_localize(None) if getattr(div.index, "tz", None) is not None else div.index
+    div = div[div > 0]
+    annual = div.groupby(div.index.year).sum()
+    first_px = close.index.min()
+    for name, (pre_y, cr_y, (p0, p1), (c0, c1)) in CRISES.items():
+        rec = {}
+        # 配当：危機前の年から上場・配当の記録があること
+        if first_px <= pd.Timestamp(f"{pre_y[0]}-01-31"):
+            pre_last = float(annual.get(pre_y[1], 0)); pre_2 = float(annual.get(pre_y[0], 0)) + pre_last
+            cr = [float(annual.get(y, 0)) for y in cr_y]
+            if pre_last > 0:
+                r1 = min(cr) / pre_last                       # 危機中で一番少ない年 ÷ 危機直前の年
+                r2 = sum(cr) / pre_2 if pre_2 > 0 else r1      # 2年合計どうし（支払い月のずれに強い）
+                # 1年だけ少なく、2年合計ではほぼ同じ → 支払い月が年をまたいでずれただけとみなす
+                rec["div"] = round(r2 if (r1 < 0.9 and r2 >= 0.98) else r1, 3)
+            else:
+                rec["div"] = None                              # 危機前から無配
+                rec["nodiv"] = True
+        # 株価：危機前の高値から、危機中の安値までの下落率
+        a = close[(close.index >= p0) & (close.index <= p1)]
+        b = close[(close.index >= c0) & (close.index <= c1)]
+        if len(a) > 20 and len(b) > 20:
+            rec["dd"] = round((float(b.min()) / float(a.max()) - 1) * 100, 1)
+        out[name] = rec or None
+    return out
+
+
+def load_crisis(tickers):
+    """過去の危機の記録をまとめて取得（結果は永続キャッシュ。新しい銘柄だけ取りに行く）"""
+    try:
+        cache = json.loads(CRISIS_CACHE.read_text()) if CRISIS_CACHE.exists() else {}
+    except Exception:
+        cache = {}
+    need = [t for t in dict.fromkeys(tickers + ["1306.T"]) if t not in cache]
+    log(f"過去の危機の記録：{len(tickers)}銘柄（新規 {len(need)}）")
+    for i in range(0, len(need), 50):
+        chunk = need[i:i + 50]
+        data = retry(lambda: yf.download(chunk, start="2006-01-01", end="2022-01-01", group_by="ticker", actions=True,
+                                         threads=True, progress=False, auto_adjust=True), label=f"危機の記録 {i}")
+        limited = _rate_limited_tickers() & set(chunk)
+        if data is None or data.empty:
+            continue
+        for t in chunk:
+            if t in limited:
+                continue                                       # 制限で取れなかった銘柄は次回取り直す
+            try:
+                d = data[t] if isinstance(data.columns, pd.MultiIndex) else data
+                cache[t] = crisis_metrics(d.get("Close"), d.get("Dividends")) or "none"
+            except Exception:
+                cache[t] = "none"
+        time.sleep(3)
+    try:
+        CRISIS_CACHE.write_text(json.dumps(cache, ensure_ascii=False, allow_nan=False))
+    except Exception as e:
+        log(f"危機の記録の保存に失敗: {e}")
+    return {t: (v if isinstance(v, dict) else None) for t, v in cache.items()}
 
 
 # ---------- 3b. 米国高配当ETF ----------
@@ -449,7 +613,8 @@ def main():
     uni = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     if uni.empty:
         raise SystemExit("対象銘柄がありません。COUNTRIES の設定を確認してください。")
-    px = load_prices_and_ttm(uni["yft"].tolist())
+    scan = UNIVERSE_SOURCE == "yahoo_scan"
+    px = load_prices_and_ttm(uni["yft"].tolist(), retry_missing=not scan)   # 総当たり時は存在しないコードが大半なので取り直さない
 
     # 一次選別：実績利回りが基準未満の銘柄は財務を取りに行かない
     def passes(r):
@@ -458,16 +623,26 @@ def main():
     pre = uni[uni.apply(passes, axis=1)].reset_index(drop=True)
     log(f"一次選別 {len(pre)} / {len(uni)} 銘柄")
 
-    out = []
-    for i, row in pre.iterrows():
+    out, failed = [], []
+    pause = 0.8
+
+    def process(row):
+        """1銘柄を処理。戻り値：True=収録 / None=対象外・データなし / False=取得失敗（取り直し対象）"""
+        nonlocal pause
         if str(row.get("need_info", "")) == "True":          # 総当たりで見つけた銘柄だけ（空欄・NaNは対象外）
             row = fill_info(row)
+            if row is False:
+                return False
             if row is None:
-                continue
+                return None
         years = fetch_financials(row["code"], row["yft"])
-        time.sleep(0.6 + random.random() * 0.4)
+        time.sleep(pause + random.random() * 0.4)
+        if years is False:
+            pause = min(pause * 2, 10)       # 制限を受けたら間隔を広げる
+            return False
+        pause = max(pause * 0.9, 0.8)
         if not years:
-            continue
+            return None
         p = px[row["yft"]]
         last = years[-1]
         last["price"] = round(p["price"], 2)
@@ -478,9 +653,30 @@ def main():
         out.append({"code": row["code"], "name": row["name"], "sector": row["sector"], "market": row["market"],
                     "country": row["country"], "currency": row["currency"],
                     "ttm_dps": round(p["ttm"], 4), "suspect": suspect, "years": years})
-        if i % 50 == 0:
-            log(f"{i}/{len(pre)} 処理中（収録 {len(out)}）")
+        return True
 
+    for i, row in pre.iterrows():
+        if process(row) is False:
+            failed.append(row)
+        if i % 50 == 0:
+            log(f"{i}/{len(pre)} 処理中（収録 {len(out)}・取り直し待ち {len(failed)}）")
+    for p_ in (1, 2):                      # 取得に失敗した銘柄を、間を空けてゆっくり取り直す
+        if not failed:
+            break
+        log(f"財務の取り直し{p_}回目：{len(failed)}銘柄（{90 * p_}秒待機）")
+        time.sleep(90 * p_)
+        pause, todo, failed = 2.0 * p_, failed, []
+        for row in todo:
+            if process(row) is False:
+                failed.append(row)
+    stats = {"universe": int(len(uni)), "priced": int(sum(1 for t in uni["yft"] if t in px)),
+             "prefilter": int(len(pre)), "saved": len(out), "failed": len(failed)}
+    log(f"収集結果 {stats}")
+
+    crisis = load_crisis([(s["code"] + ".T") if s["country"] == "JP" else s["code"].replace(".", "-") for s in out])
+    for s_ in out:
+        s_["crisis"] = crisis.get((s_["code"] + ".T") if s_["country"] == "JP" else s_["code"].replace(".", "-"))
+    bench = crisis.get("1306.T") or {}
     out.sort(key=lambda s: -(s["ttm_dps"] / s["years"][-1]["price"]))
     counts = {c: sum(1 for s in out if s["country"] == c) for c in ["JP"] + (["US"] if US_STOCKS else [])}
     OUT.parent.mkdir(exist_ok=True)
@@ -488,7 +684,7 @@ def main():
         "updated": dt.datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
         "source": "Yahoo Finance (yfinance) / JPX上場銘柄一覧" + (" / S&P500構成銘柄" if US_STOCKS else ""),
         "min_yield": MIN_YIELD, "min_yield_us": MIN_YIELD_US if US_STOCKS else None, "universe": len(uni), "count": len(out),
-        "counts": counts, "universe_source": UNIVERSE_SOURCE, "macro": load_macro(), "etfs": load_etfs() if "US" in COUNTRIES else [], "stocks": out,
+        "counts": counts, "stats": stats, "crisis_bench": {k: (v or {}).get("dd") for k, v in bench.items()} if bench else None, "universe_source": UNIVERSE_SOURCE, "macro": load_macro(), "etfs": load_etfs() if "US" in COUNTRIES else [], "stocks": out,
     }, ensure_ascii=False, allow_nan=False))
     log(f"完了: {len(out)} 銘柄を保存 {counts}（{(time.time() - t0) / 60:.0f}分）")
 
