@@ -126,6 +126,8 @@ def _fetch_excel(url, label):
             return r.content
         if r is not None and r.status_code == 200:
             log(f"{label}: Excelではない内容が返されました（先頭: {r.content[:60]!r}）")
+        if r is not None and r.status_code in (404, 410):
+            break
         time.sleep(5 * (k + 1))
     return None
 
@@ -134,7 +136,12 @@ def _find_link(page_url, pattern, label):
     r = _get(page_url, label)
     if r is None or r.status_code != 200:
         return None
-    m = re.search(pattern, r.text)
+    try:
+        m = re.search(pattern, getattr(r, "text", "") or "")
+    except Exception:
+        m = None
+    if not m:
+        log(f"{label}: ページに一覧ファイルの場所が見つかりません")
     return urljoin(page_url, m.group(1)) if m else None
 
 
@@ -245,12 +252,17 @@ def load_universe() -> pd.DataFrame:
             log(f"J-Quantsから {len(df)} 銘柄を取得")
         else:
             df = None
-    tries = [("JPX一覧", lambda: JPX_LIST, False),
-             ("JPXページから一覧を探す", lambda: _find_link(JPX_PAGE, r'href="([^"]*data_j\.xlsx?)"', "JPXページ"), False),
-             ("JPX英語版一覧", lambda: JPX_LIST_EN, True),
-             ("JPX英語版ページから探す", lambda: _find_link(JPX_PAGE_EN, r'href="([^"]*data_e\.xlsx?)"', "JPX英語版ページ"), True)]
+    tries = [("JPXページから一覧を探す", lambda: _find_link(JPX_PAGE, r'href="([^"]*data_j\.xlsx?)"', "JPXページ"), False),
+             ("JPX一覧(xlsx)", lambda: JPX_LIST.replace(".xls", ".xlsx"), False),
+             ("JPX一覧(xls)", lambda: JPX_LIST, False),
+             ("JPX英語版ページから探す", lambda: _find_link(JPX_PAGE_EN, r'href="([^"]*data_e\.xlsx?)"', "JPX英語版ページ"), True),
+             ("JPX英語版一覧", lambda: JPX_LIST_EN, True)]
     for label, url_fn, en in (tries if df is None else []):
-        url = url_fn()
+        try:
+            url = url_fn()
+        except Exception as e:           # どんな失敗でも次の方法へ進む
+            log(f"{label}: 失敗 {str(e)[:150]}")
+            url = None
         if not url:
             continue
         content = _fetch_excel(url, label)
