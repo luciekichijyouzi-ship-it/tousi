@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   update:
-    runs-on: ubuntu-24.04     # 自動の版上げ（Ubuntu 26）で急に動かなくなるのを防ぐため固定
+    runs-on: ubuntu-24.04
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@v6
@@ -25,7 +25,7 @@ jobs:
           cache: pip
 
       - name: 財務キャッシュを復元
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: cache
           key: fin-cache-${{ github.run_id }}
@@ -37,8 +37,16 @@ jobs:
         timeout-minutes: 300
         env:
           UNIVERSE_LIMIT: ${{ vars.UNIVERSE_LIMIT }}
-          COUNTRIES: "JP,US"        # JP=日本の上場株すべて、US=米国高配当ETF（VYM・HDV・SPYD）
+          COUNTRIES: "JP,US"
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
         run: python screen.py
+
+      - name: 財務キャッシュを保存（途中で止まっても、集めた分は次回に使う）
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: cache
+          key: fin-cache-${{ github.run_id }}
 
       - name: 結果をコミット
         run: |
