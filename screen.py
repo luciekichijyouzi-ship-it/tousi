@@ -17,7 +17,7 @@
   US_STOCKS       1 にすると米国の個別株（S&P500採用銘柄）も集める（既定 0＝ETFだけ）
   MIN_YIELD_US    米国個別株の一次選別の最低利回り%（既定 2.0）
 """
-import io, json, math, os, random, re, time, datetime as dt
+import io, json, math, os, random, re, time, traceback, datetime as dt
 from urllib.parse import urljoin
 from pathlib import Path
 
@@ -56,6 +56,37 @@ def retry(fn, tries=4, base=5, label=""):
             log(f"{label} 失敗({k + 1}/{tries}): {str(e)[:120]} → {wait:.0f}秒待機")
             time.sleep(wait)
     return None
+
+
+def safe(fn, label, default=None):
+    """補助的な処理（危機の記録・ETF・景気など）は失敗しても全体を止めない。理由はログに残す"""
+    try:
+        return fn()
+    except Exception as e:
+        log(f"{label}で失敗（この部分を飛ばして続行）: {type(e).__name__}: {str(e)[:200]}")
+        log(traceback.format_exc(limit=3)[-600:])
+        return default
+
+
+SCRUBBED = []
+
+
+def scrub(o, path="data"):
+    """JSONに書けない NaN・無限大 を None に置き換える（どこかに混ざっても保存できるように）。場所は記録する"""
+    if isinstance(o, dict):
+        return {k: scrub(v, f"{path}.{k}") for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        lab = lambda i, v: f"{path}[{i}]" + (f"({v.get('code')})" if isinstance(v, dict) and v.get("code") else "")
+        return [scrub(v, lab(i, v)) for i, v in enumerate(o)]
+    if isinstance(o, float) and (math.isnan(o) or math.isinf(o)):
+        SCRUBBED.append(f"{path}={o}")
+        return None
+    if hasattr(o, "item") and not isinstance(o, (str, bytes)):     # numpy の数値
+        try:
+            return scrub(o.item(), path)
+        except Exception:
+            return None
+    return o
 
 
 def clean(v):
@@ -538,7 +569,7 @@ def load_crisis(tickers):
                 cache[t] = "none"
         time.sleep(3)
     try:
-        CRISIS_CACHE.write_text(json.dumps(cache, ensure_ascii=False, allow_nan=False))
+        CRISIS_CACHE.write_text(json.dumps(scrub(cache, "危機の記録"), ensure_ascii=False, allow_nan=False))
     except Exception as e:
         log(f"危機の記録の保存に失敗: {e}")
     return {t: (v if isinstance(v, dict) else None) for t, v in cache.items()}
@@ -667,8 +698,21 @@ def main():
                     "ttm_dps": round(p["ttm"], 4), "suspect": suspect, "years": years})
         return True
 
+    bad = 0
+
+    def process_safe(row):
+        nonlocal bad
+        try:
+            return process(row)
+        except Exception as e:           # 予想外のデータでも、その銘柄だけ飛ばして続ける
+            bad += 1
+            if bad <= 5:
+                log(f"{row['code']} の処理で予想外のエラー（飛ばして続行）: {type(e).__name__}: {str(e)[:200]}")
+                log(traceback.format_exc(limit=3)[-600:])
+            return None
+
     for i, row in pre.iterrows():
-        if process(row) is False:
+        if process_safe(row) is False:
             failed.append(row)
         if i % 50 == 0:
             log(f"{i}/{len(pre)} 処理中（収録 {len(out)}・取り直し待ち {len(failed)}）")
@@ -679,25 +723,30 @@ def main():
         time.sleep(90 * p_)
         pause, todo, failed = 2.0 * p_, failed, []
         for row in todo:
-            if process(row) is False:
+            if process_safe(row) is False:
                 failed.append(row)
     stats = {"universe": int(len(uni)), "priced": int(sum(1 for t in uni["yft"] if t in px)),
-             "prefilter": int(len(pre)), "saved": len(out), "failed": len(failed)}
+             "prefilter": int(len(pre)), "saved": len(out), "failed": len(failed), "skipped_errors": bad}
     log(f"収集結果 {stats}")
 
-    crisis = load_crisis([(s["code"] + ".T") if s["country"] == "JP" else s["code"].replace(".", "-") for s in out])
+    crisis = safe(lambda: load_crisis([(s["code"] + ".T") if s["country"] == "JP" else s["code"].replace(".", "-") for s in out]),
+                  "過去の危機の記録", default={}) or {}
     for s_ in out:
         s_["crisis"] = crisis.get((s_["code"] + ".T") if s_["country"] == "JP" else s_["code"].replace(".", "-"))
     bench = crisis.get("1306.T") or {}
     out.sort(key=lambda s: -(s["ttm_dps"] / s["years"][-1]["price"]))
     counts = {c: sum(1 for s in out if s["country"] == c) for c in ["JP"] + (["US"] if US_STOCKS else [])}
     OUT.parent.mkdir(exist_ok=True)
-    OUT.write_text(json.dumps({
+    payload = {
         "updated": dt.datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
         "source": "Yahoo Finance (yfinance) / JPX上場銘柄一覧" + (" / S&P500構成銘柄" if US_STOCKS else ""),
         "min_yield": MIN_YIELD, "min_yield_us": MIN_YIELD_US if US_STOCKS else None, "universe": len(uni), "count": len(out),
-        "counts": counts, "stats": stats, "crisis_bench": {k: (v or {}).get("dd") for k, v in bench.items()} if bench else None, "universe_source": UNIVERSE_SOURCE, "macro": load_macro(), "etfs": load_etfs() if "US" in COUNTRIES else [], "stocks": out,
-    }, ensure_ascii=False, allow_nan=False))
+        "counts": counts, "stats": stats, "crisis_bench": {k: (v or {}).get("dd") for k, v in bench.items()} if bench else None, "universe_source": UNIVERSE_SOURCE, "macro": safe(load_macro, "景気シグナル"), "etfs": (safe(load_etfs, "米国ETF", default=[]) or []) if "US" in COUNTRIES else [],
+        "stocks": out,
+    }
+    OUT.write_text(json.dumps(scrub(payload), ensure_ascii=False, allow_nan=False))
+    if SCRUBBED:
+        log(f"保存できない値（NaN・無限大）を{len(SCRUBBED)}件、空欄にして保存しました。例: {SCRUBBED[:5]}")
     log(f"完了: {len(out)} 銘柄を保存 {counts}（{(time.time() - t0) / 60:.0f}分）")
 
 
