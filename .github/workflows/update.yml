@@ -38,7 +38,6 @@ jobs:
         env:
           UNIVERSE_LIMIT: ${{ vars.UNIVERSE_LIMIT }}
           COUNTRIES: "JP,US"
-          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
         run: python screen.py
 
       - name: 財務キャッシュを保存（途中で止まっても、集めた分は次回に使う）
