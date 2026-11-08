@@ -140,6 +140,16 @@ body:not(.etf) .etfOnly{display:none!important}
 .navi .item b{display:block;font-size:14px;margin-bottom:2px}
 .navi .warn2{border-left-color:#C8553D}.navi .info{border-left-color:var(--gold)}.navi .good{border-left-color:var(--pass)}
 .navi .item .btn{margin-top:8px;padding:6px 14px;font-size:13px}
+.btn.sm{padding:5px 12px;font-size:12px}
+body.simple nav button:not([data-t="buy"]){display:none}
+body.simple .hdesc{display:none}
+.steps{margin:0;padding-left:1.4em;font-size:13px;line-height:1.9;color:var(--sub)}.steps li.done{color:var(--pass);text-decoration:line-through}
+.wiz{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;padding-top:max(16px,env(safe-area-inset-top))}
+.wiz[hidden]{display:none}
+.wizbox{background:var(--card);color:var(--ink);border-radius:14px;max-width:520px;width:100%;padding:20px;max-height:90vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.wizstep{font-size:12px;color:var(--sub);margin:0 0 4px}.wizbox h2{margin:0 0 10px;font-size:18px}
+.choice{display:block;width:100%;text-align:left;border:2px solid var(--line);background:var(--paper);color:var(--ink);border-radius:10px;padding:12px 14px;margin:8px 0;font:inherit;font-size:14px;cursor:pointer}
+.choice.on{border-color:var(--pass);background:var(--pass-bg)}.choice small{display:block;color:var(--sub);font-size:12px;margin-top:2px}
 .rec{border:2px solid var(--pass);background:var(--pass-bg);border-radius:10px;padding:14px;margin-bottom:12px}
 .rec b{font-size:17px;display:block;margin-bottom:4px}.rec p{margin:0;font-size:13px;line-height:1.7}
 .sig{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px}
@@ -157,8 +167,20 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
 <div class="wrap">
 <header>
   <h1>高配当株スクリーナー</h1>
-  <p>リベ大式の条件で銘柄を判定し、投資額を入れるだけで4つの戦略のポートフォリオを自動で組みます。</p>
+  <p class="hdesc">リベ大式の条件で銘柄を判定し、投資額を入れるだけで4つの戦略のポートフォリオを自動で組みます。</p>
+  <div class="row hbtns" style="gap:8px;margin-top:8px"><button class="btn ghost sm" id="simpleBtn" type="button">くわしい画面にする</button><button class="btn ghost sm" id="wizBtn" type="button">はじめにナビ（設定をやり直す）</button></div>
 </header>
+<div id="wiz" class="wiz" role="dialog" aria-modal="true" aria-labelledby="wizTitle" hidden>
+  <div class="wizbox">
+    <p class="wizstep" id="wizStep"></p>
+    <h2 id="wizTitle"></h2>
+    <div id="wizBody"></div>
+    <div class="row" style="gap:8px;margin-top:16px;justify-content:space-between">
+      <button class="btn ghost" id="wizBack" type="button">戻る</button>
+      <span><button class="btn ghost" id="wizSkip" type="button">あとで</button> <button class="btn" id="wizNext" type="button">次へ</button></span>
+    </div>
+  </div>
+</div>
 
 <nav role="tablist">
   <button role="tab" data-t="load" aria-selected="true">1.<span class="tl"> データ読込</span><span class="ts">読込</span></button>
@@ -309,7 +331,8 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
 <section id="buy">
   <div class="panel">
     <h2>今月の買付リスト</h2>
-    <p class="lead" style="margin-bottom:0">戦略：<b id="buyStrat"></b>。不足している銘柄から順に、今月買う株数を出します。</p>
+    <p class="lead" style="margin-bottom:6px">戦略：<b id="buyStrat"></b>。不足している銘柄から順に、今月買う株数を出します。</p>
+    <ol class="steps" id="buySteps"><li>下のリストを確認</li><li>SBI証券で注文（S株・預り区分はNISA）</li><li>「注文した分を保有に反映」を押す</li></ol>
   </div>
   <div class="kpis" id="buyKpi"></div>
   <div class="panel navi" id="naviPanel"><h2>設定ナビ</h2><div id="naviBox"></div></div>
@@ -330,7 +353,7 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
   <div>
     <div class="grid">
       <label class="f">今月の投資額（円）<input type="number" id="buyAmt" value="200000" step="10000" min="0"></label>
-      <label class="f">注文数の上限（件/月）<input type="number" id="maxOrders" value="10" min="1" max="100"></label>
+      <label class="f">注文数の上限（件/月）<span class="row" style="gap:8px;align-items:center;flex-wrap:nowrap"><input type="checkbox" id="autoOrders" checked style="width:20px;height:20px;flex:none"><span style="flex:none;font-size:13px">おまかせ<small id="autoKLbl" style="display:block;color:var(--sub)"></small></span><input type="number" id="maxOrders" value="10" min="1" max="100" style="min-width:0" aria-label="手動の注文数"></span></label>
       <label class="f">1件の最低購入額（円）<input type="number" id="minOrder" value="3000" step="1000" min="0"></label>
       <label class="f nisaOnly">今年のNISA成長枠の使用額（円）<input type="number" id="nisaUsed" value="0" step="10000" min="0" max="2400000"></label>
       <label class="f">前月までの残り（繰越）<span class="row" style="gap:8px;align-items:center"><input type="checkbox" id="useCarry" checked style="width:20px;height:20px"><span id="carryLbl">0円を今月に足す</span></span></label>
@@ -338,6 +361,26 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
     </div>
   </details>
   <div class="panel" id="reviewPanel"><h2>確認が必要な保有</h2><div id="reviewBox"></div></div>
+  <div class="panel" id="swapPanel">
+    <h2>入れ替えナビ（張り替え）</h2>
+    <p class="lead">減配した・条件を外れた保有を売り、そのお金で今の基準に合う銘柄を買う案です。<b>売るかどうかは最後はご自身で判断</b>してください。理由のない入れ替えは手数料と税金のぶん損になりやすいので、この画面は理由がある保有だけを出します。</p>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 10px;line-height:1.6"><input type="checkbox" id="swapPrio" style="width:20px;height:20px;flex:none;margin-top:2px">リベ大式へ寄せる（買い増しを止めている保有も入れ替え候補にする）</label>
+    <div id="swapBox"></div>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">入れ替えの手順（SBI証券）</summary>
+      <ol class="steps" style="margin-top:8px">
+        <li>保有銘柄の表で、売る銘柄の<b>口座</b>と<b>取得単価</b>を入れる（税金の目安が出ます。SBIの「口座管理」→「保有証券」で確認できます）</li>
+        <li>売り注文を出す（S株は翌営業日の寄付きで約定。NISAで持っている株は「NISA預り」を選んで売る）</li>
+        <li>約定を確認したら、売却代金で上の「代わりに買う」銘柄を注文する（S株・預り区分は表示どおり）</li>
+        <li>両方の約定を確認してから「入れ替えを保有に反映」を押す。間違えたら「入れ替えを取り消す」</li>
+      </ol>
+      <p class="note">売りと買いは同じ日に出さず、売りの約定を確認してから買う方が安全です。暴落時は売った翌日に買う銘柄も下がっていることが多いので、値段の差はほぼ打ち消し合います。</p>
+    </details>
+    <div class="row" style="margin-top:10px;gap:8px">
+      <button class="btn" id="applySwap">入れ替えを保有に反映</button>
+      <button class="btn ghost" id="undoSwap">入れ替えを取り消す</button>
+    </div>
+    <div class="msg" id="swapMsg" role="status"></div>
+  </div>
   <div class="panel">
     <h2>保有銘柄</h2>
     <p class="lead">反映すると自動で増えます。すでに持っている株は下で追加するか、まとめて貼り付けてください。</p>
@@ -445,7 +488,7 @@ function ingestJSON(d){dataVer++;
     years:s.years.map(y=>({year:y.year,yk:yearKey(y.year),price:y.price??null,sales:y.sales??null,op:y.op??null,opm:null,
       eps:y.eps??null,ni:y.ni??null,dps:y.dps??null,payout:null,equity:y.equity??null,opcf:y.opcf??null,cash:y.cash??null,debt:y.debt??null})).sort((a,b)=>a.yk-b.yk)}));
   macro=d.macro||null;crisisBench=d.crisis_bench||null;
-  dataMeta={count:(d.stocks||[]).length,source:d.universe_source||'jpx',stats:d.stats||null};
+  dataMeta={count:(d.stocks||[]).length,source:d.universe_source||'jpx',stats:d.stats||null,updated:d.updated||null};
   etfs=(d.etfs||[]).filter(e=>e&&e.code&&e.price>0&&e.ttm>=0).map(e=>({...e,dg:e.dg??null}));
   if(macro&&macro.usdjpy>50&&macro.usdjpy<400)$('#fx').value=macro.usdjpy.toFixed(1);
   setUS();
@@ -868,12 +911,13 @@ const normCode=c=>String(c||'').trim().toUpperCase().replace(/\.T$/,'').replace(
 function cleanHoldings(){for(const k of Object.keys(st.holdings)){const v=Math.floor(+st.holdings[k]);if(!(v>0))delete st.holdings[k];else st.holdings[k]=v;}}
 cleanHoldings();
 // 保有を貼り付けた文章から読む：各行からコードと株数を探す
-function parseHoldings(text){const out={};let bad=0,nisa=null,carry=null;
+function parseHoldings(text){const out={},meta={};let bad=0,nisa=null,carry=null;
   String(text||'').split(/\r?\n/).forEach(raw=>{
     let line=raw.replace(/[０-９Ａ-Ｚ．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/"/g,' ').trim(); if(!line)return;
     if(line.startsWith('#')){   // バックアップのNISA行
       const m=line.match(/(\d{4})年の使用額\s*(\d+)\s*\/\s*生涯残り\s*(\d+)/);if(m)nisa={year:+m[1],used:+m[2],left:+m[3]};
-      const cm=line.match(/繰越\s*(\d+)/);if(cm)carry=+cm[1];return;}
+      const cm=line.match(/繰越\s*(\d+)/);if(cm)carry=+cm[1];
+      const am=line.match(/^#\s*口座\s+(\S+)\s+(NISA|特定)?\s*([\d.]+)?/);if(am){meta[normCode(am[1])]={...(am[2]?{acct:am[2]}:{}),...(am[3]?{cost:+am[3]}:{})};}return;}
     // 日付（2024/03/15、2024年）や金額の一部を拾わないよう、前後の文字を確認
     const m=line.match(/(?:^|[^0-9A-Z\/.,])(\d{3}[0-9A-Z])(?![0-9A-Z\/.年月日:])/)||line.match(/(?:^|[^A-Za-z])([A-Z]{1,5}(?:[.\-][A-Z])?)(?![A-Za-z])/);
     if(!m){bad++;return;}
@@ -881,36 +925,47 @@ function parseHoldings(text){const out={};let bad=0,nisa=null,carry=null;
     const n=rest.match(/(^|[\s,\t])(\d{1,7})(株|口)?(?=[\s,\t]|$)/);
     if(!n){bad++;return;}
     const code=normCode(m[1]); out[code]=(out[code]||0)+(+n[2]);});
-  return {out,bad,nisa,carry};}
+  return {out,bad,nisa,carry,meta};}
 function quoteMap(){const q={};results.forEach(x=>q[normCode(x.g.code)]=x);etfs.forEach(e=>q[normCode(e.code)]=etfItem(e));return q;}
 
 function buildBuy(o={}){
-  const M=o.M??buyBudget(),K=clampNum($('#maxOrders').value,1,100,10),minO=clampNum($('#minOrder').value,0,1e7,0);
+  const M=o.M??buyBudget(),minO=clampNum($('#minOrder').value,0,1e7,0),autoK=$('#autoOrders')?$('#autoOrders').checked:false;
+  let K=clampNum($('#maxOrders').value,1,100,10);
   const tax=clampNum($('#tax').value,0,60,20.315)/100,lotMode=$('#lot').value,mode=hasUS?$('#usMode').value:'none',pick=$('#etfPick').value;
   const q=quoteMap(),H=st.holdings,review=[];
   let heldVal=0,inactive=0;
   // 保有の評価と、今の戦略の対象から外れた保有の洗い出し
   for(const [code,sh] of Object.entries(H)){const x=q[code];
-    if(!x||!(x.m.pj>0)){review.push({code,sh,name:x?x.g.name:'',msg:'データにありません。上場廃止・コードの誤り・一次選別（利回り2.5%未満）で外れた可能性があります。',val:0});continue;}
+    if(!x||!(x.m.pj>0)){review.push({kind:'nodata',code,sh,name:x?x.g.name:'',msg:'データにありません。上場廃止・コードの誤り・一次選別（利回り2.5%未満）で外れた可能性があります。',val:0});continue;}
     const v=sh*x.m.pj; heldVal+=v;
-    let out='';
-    if(x.etf){if(mode!=='etf')out='米国部分を「ETF」以外にしているため、買い増しの対象外です。';else if(pick!=='all'&&pick!==x.g.code)out='「ETFの選び方」の設定外のため、買い増しの対象外です。';}
-    else if(x.g.suspect)out='記念配当やデータ異常の疑いがあります。IRで確認してください。';
-    else if(x.r.dps===false)out='減配した可能性があります。IRで理由を確認し、一時的か業績悪化かを見てください。';
-    else if(!x.ok)out='今の戦略の条件を外れました。買い増しは止め、保有を続けるかは業績と配当の推移を見て判断してください。';
-    else if(x.US&&mode==='none')out='米国部分を「使わない」にしているため、買い増しの対象外です。';
-    if(out){review.push({code,sh,name:x.g.name,msg:out,val:v});inactive+=v;}}
+    let out='',kind='';
+    if(x.etf){kind='setting';if(mode!=='etf')out='米国部分を「ETF」以外にしているため、買い増しの対象外です。';else if(pick!=='all'&&pick!==x.g.code)out='「ETFの選び方」の設定外のため、買い増しの対象外です。';}
+    else if(x.g.suspect){kind='suspect';out='記念配当やデータ異常の疑いがあります。IRで確認してください。';}
+    else if(x.r.dps===false){kind='cut';out='減配した可能性があります。IRで理由を確認し、一時的か業績悪化かを見てください。';}
+    else if(!x.ok){kind='fail';out='今の戦略の条件を外れました。買い増しは止め、保有を続けるかは業績と配当の推移を見て判断してください。';}
+    else if(x.US&&mode==='none'){kind='setting';out='米国部分を「使わない」にしているため、買い増しの対象外です。';}
+    if(out){review.push({kind,code,sh,name:x.g.name,msg:out,val:v,x});inactive+=v;}}
   const T=Math.max(0,heldVal-inactive+M);
   const cfg=o.cfg||cfgCurrent();if(o.capUS!=null)cfg.capUS=o.capUS;cfg.held=new Set(Object.keys(H));cfg.normCode=normCode;
-  const target=buildPF(o.res||results,cfg,T,lotMode,{mode,etfPick:pick,tax});
+  // 目標の配分は「1年分の積立」の規模で決める（今の金額だけで決めると、少額の時に1銘柄の上限が1株の価格を下回り、何も買えなくなるため）
+  const Tplan=Math.max(T,M*12),plan=buildPF(o.res||results,cfg,Tplan,lotMode,{mode,etfPick:pick,tax}),sc=Tplan>0?T/Tplan:0;
+  const target={...plan,B:T,invested:plan.invested*sc,usAmt:plan.usAmt*sc,div:plan.div*sc,items:plan.items.map(it=>({...it,amt:it.amt*sc}))};
   // 目標との差（不足額）
   // 条件は満たしているが、上位の銘柄を優先したため目標から外れた保有（売る必要はない）
   const inTarget=new Set(target.items.map(o=>normCode(o.x.g.code))),flagged=new Set(review.map(r=>r.code)),ts=tierSet(cfg);
   for(const [code,sh] of Object.entries(H)){const x=q[code];if(!x||flagged.has(code)||inTarget.has(code)||!(x.m.pj>0))continue;
-    review.push({code,sh,name:x.g.name,info:true,val:sh*x.m.pj,msg:ts?'リベ大式の基準に合格した銘柄を優先したため、買い増しの対象から外れました。条件は満たしているので売る必要はなく、配当は受け取り続けます。':'銘柄数の上限の中で、より評価の高い銘柄を優先したため買い増しの対象から外れました。条件は満たしているので売る必要はありません。'});}
+    review.push({kind:'prio',x,code,sh,name:x.g.name,info:true,val:sh*x.m.pj,msg:ts?'リベ大式の基準に合格した銘柄を優先したため、買い増しの対象から外れました。条件は満たしているので売る必要はなく、配当は受け取り続けます。':'銘柄数の上限の中で、より評価の高い銘柄を優先したため買い増しの対象から外れました。条件は満たしているので売る必要はありません。'});}
   const need=target.items.map(o=>{const cur=(H[normCode(o.x.g.code)]||0)*o.x.m.pj,lot=o.x.US?1:target.lot;
     return {x:o.x,lot,cost:o.x.m.pj*lot,def:o.amt-cur,tAmt:o.amt,cur};}).filter(o=>o.def>0&&o.cost>0&&o.cost<=M);
-  need.sort((a,b)=>b.def-a.def);
+  // まだ持っていない銘柄（分散の穴）を優先。「おまかせ」なら、予算と最低購入額の許す限り全銘柄に広げる
+  const isNew=o=>!((H[normCode(o.x.g.code)]||0)>0);
+  const unheld=need.filter(isNew).length;
+  // おまかせ：予算÷最低購入額の範囲で注文数を決める（まだ持っていない銘柄があれば広く、そろった後は最大10件）
+  // 1単位の価格が目標額の2倍を超える銘柄（例：少額の時のVYM 1口約2万円）は、無理に今買わず、保有額が育ってから買う
+  const minBuy=o=>o.cost*Math.max(1,Math.ceil(minO/o.cost)),forcible=o=>isNew(o)&&o.cost<=Math.max(minO*2,o.def*2);
+  need.sort((a,b)=>(forcible(b)-forcible(a))||(isNew(b)-isNew(a))||(b.def-a.def));
+  if(autoK){let sum=0,n=0;for(const o of need){const c=forcible(o)?minBuy(o):Math.max(minO,Math.min(o.def,M));if(sum+c>M)break;sum+=c;n++;}
+    K=unheld>0?Math.max(1,n):Math.max(1,Math.min(10,n));}
   let top=need.slice(0,K);
   const lines=[];let left=M;
   // 注文数の上限で選びきれない時だけ、今月選んだ銘柄を一時的に目標より多めに買う（翌月以降に他の銘柄が追いつく）。
@@ -918,7 +973,10 @@ function buildBuy(o={}){
   const allocate=()=>{lines.length=0;left=M;const D=top.reduce((a,o)=>a+o.def,0);if(!D)return;
     const limited=need.length>top.length;
     top.forEach(o=>{let alloc=D>=M?M*o.def/D:(limited?o.def+(M-D)*o.def/D:o.def);
-      const cap=limited?Math.max(o.def*3,o.def+M/top.length):o.def; if(limited)alloc=Math.min(alloc,cap);
+      if(forcible(o))alloc=Math.max(alloc,o.cost*Math.max(1,Math.ceil(minO/o.cost)));   // まだ持っていない銘柄は、最低購入額に届く株数（最低1株）を必ず買う
+      // 1銘柄の上限：保有が「目標額の1.5倍＋最低購入額」を超えない（合格が少ない時に、余ったお金を数銘柄へ集中させないため）
+      const ceil=Math.max(0,o.tAmt*1.5+minBuy(o)-o.cur);
+      const cap=Math.min(Math.max(limited?Math.max(o.def*3,o.def+M/top.length):o.def,forcible(o)?minBuy(o):0),Math.max(ceil,forcible(o)?minBuy(o):0)); alloc=Math.min(alloc,cap);
       const n=Math.floor(Math.min(alloc,left)/o.cost);
       if(n>0){lines.push({o,n,amt:n*o.cost,alloc,cap});left-=n*o.cost;}});};
   allocate();
@@ -938,6 +996,10 @@ function buildBuy(o={}){
     c.n++;c.amt+=c.o.cost;left-=c.o.cost;}
   for(const o of need){if(lines.length>=K)break;if(lines.some(l=>l.o===o))continue;
     const n=Math.floor(Math.min(left,o.def)/o.cost);if(n>0&&n*o.cost>=minO){lines.push({o,n,amt:n*o.cost,alloc:n*o.cost,cap:o.def});left-=n*o.cost;}}
+  // 仕上げ：最低購入額に届かない注文は外し（1株で最低額を超える銘柄は除く）、そのお金を他の注文の買い増しに回す
+  for(let g=0;g<3;g++){const small=lines.filter(l=>l.amt<minO&&l.o.cost<minO);if(!small.length)break;
+    small.forEach(l=>{left+=l.amt;lines.splice(lines.indexOf(l),1);});
+    for(let h=0;h<5000;h++){const c=lines.filter(l=>l.o.cost<=left&&l.amt+l.o.cost<=Math.max(l.cap||0,l.alloc)*1.5).sort((a2,b2)=>(b2.o.def-b2.amt)-(a2.o.def-a2.amt))[0];if(!c)break;c.n+=1;c.amt+=c.o.cost;left-=c.o.cost;}}
   // NISA枠：非課税の効果が大きい日本株から先に割り当て、はみ出す分は特定口座に分ける
   const nisa=$('#acct').value==='nisa';
   let room=nisa?Math.max(0,Math.min(NISA_YEAR-clampNum($('#nisaUsed').value,0,NISA_YEAR,0),clampNum($('#nisaLeft').value,0,12e6,12e6))):0;
@@ -947,8 +1009,16 @@ function buildBuy(o={}){
     if(nN>0){orders.push({...l,n:nN,amt:nN*l.o.cost,acct:'NISA'});room-=nN*l.o.cost;}
     if(l.n-nN>0)orders.push({...l,n:l.n-nN,amt:(l.n-nN)*l.o.cost,acct:'特定'});});
   const skipped=need.length-lines.length;
-  return {M,T,orders,left,target,review,heldVal,skipped,affordable:need.length,noTarget:!target.items.length};
+  const targetN=target.items.length,heldN=target.items.filter(o=>(H[normCode(o.x.g.code)]||0)>0).length;
+  const afterN=target.items.filter(o=>(H[normCode(o.x.g.code)]||0)>0||orders.some(l=>l.o.x===o.x)).length;
+  return {M,T,K,orders,left,target,review,heldVal,skipped,affordable:need.length,noTarget:!target.items.length,targetN,heldN,afterN,unheld};
 }
+/* ---------- 推奨の分散銘柄数 ----------
+   1社が減配・無配になっても、配当全体への影響を「1銘柄の上限」以内に抑えるには、最低 100÷上限% 銘柄が必要 */
+const IDEAL_N={hybrid:30,libe:30,growth:25,fortress:20};
+function recDiv(){const s=STRATS.find(x=>x.id===stratId)||STRATS[0],cs=clampNum($('#capStock').value,1,100,s.capStock);
+  const min=Math.ceil(100/cs),ideal=Math.max(min,IDEAL_N[s.id]||25);return {min,ideal,cs};}
+
 /* ---------- 設定ナビ：よくないポイントと、おすすめの組み合わせ ---------- */
 function stratCfg(s){const c=cfgFromStrat(s);return c;}
 function adviseBuy(b){
@@ -978,6 +1048,29 @@ function adviseBuy(b){
         act:{l:'この設定にする',fn:()=>{applyStrat(best.s.id);$('#capUS').value=best.c;runAll();}}});
     }else items.push({lv:'info',t:`${man(b.left)}は来月に繰り越されます`,x:why+'ほかの戦略やETFの割合でも大きくは改善しないため、残りは「保有に反映」を押すと翌月の投資額に自動で足されます。'});
   }
+  // 0) 安全：今月すでに反映済み（二重買いの防止）
+  const ym=new Date().toISOString().slice(0,7),ap=(st.applied||{})[ym];
+  if(ap)items.push({lv:'warn2',t:`今月の買付は ${ap} に反映済みです`,x:'同じリストでもう一度注文すると二重に買うことになります。追加でお金を入れる時だけ、下のリストを使ってください。間違えて反映した時は「直前の反映を取り消す」で戻せます。'});
+  // 0) データの古さ
+  const upd=dataMeta.updated?new Date(dataMeta.updated.replace(' ','T')+':00+09:00'):null,age=upd&&!isNaN(upd)?Math.floor((Date.now()-upd)/864e5):null;
+  if(age!=null&&age>=10)items.push({lv:'warn2',t:`株価データが${age}日前のものです`,x:'毎週土曜の自動更新が止まっている可能性があります。古い株価のまま注文すると、金額や銘柄の選び方がずれます。GitHubでデータ更新を実行してから買付してください。',
+    btn:$('#runLink')&&$('#runLink').href&&$('#runLink').style.display!=='none'?{l:'GitHubでデータ更新を実行',href:$('#runLink').href}:null});
+  // 0) 分散の進み具合・推奨の銘柄数
+  const rd=recDiv(),tgtJP=jpT.length;
+  if(b.targetN>0&&b.heldN<b.targetN){const perMonth=Math.max(1,b.afterN-b.heldN),rest=b.targetN-b.afterN,months=rest>0?Math.ceil(rest/perMonth):0;
+    items.push({lv:'info',t:`分散の進み具合：目標${b.targetN}銘柄のうち保有${b.heldN}→今月の注文後${b.afterN}`,
+      x:rest>0?`あと${months}か月ほどで全銘柄がそろいます。${$('#autoOrders').checked?'':'注文数を「おまかせ」にすると、予算の許す限り最初から全銘柄に分散します。'}`:'今月の注文で、目標の全銘柄がそろいます。そろった後は、目標の比率より少ない銘柄から順に買い足します。',
+      act:!$('#autoOrders').checked&&rest>0?{l:'注文数をおまかせにする',fn:()=>{$('#autoOrders').checked=true;savePrefs();renderBuy();}}:null});}
+  if(tgtJP>0&&tgtJP<rd.min&&b.target.etfN===0)items.push({lv:'warn2',t:`分散する銘柄が少なめです（日本株${tgtJP}銘柄・推奨${rd.min}〜${rd.ideal}銘柄）`,
+    x:`1銘柄の上限が${rd.cs}%なので、1社が減配しても全体への影響を${rd.cs}%以内に抑えるには、最低${rd.min}銘柄が必要です。`,
+    act:stratId!=='hybrid'?{l:'段階型にする（合格銘柄が多く分散しやすい）',fn:()=>{applyStrat('hybrid');runAll();}}:null});
+  const mx=clampNum($('#maxStocks').value,1,500,30);
+  if(mx<rd.min)items.push({lv:'warn2',t:`「組み入れる銘柄数の上限」が少なすぎます（${mx}銘柄）`,x:`推奨は${rd.min}〜${rd.ideal}銘柄です。上限が少ないと、1社の減配の影響が大きくなります。`,
+    act:{l:`${rd.ideal}銘柄にする`,fn:()=>{$('#maxStocks').value=rd.ideal;runAll();}}});
+  // 0) 値上がりで比率が高くなりすぎた保有
+  {const q2=quoteMap();let tot=0;const vals=Object.entries(st.holdings).map(([c,n])=>{const x=q2[c];const v=x&&x.m.pj>0?n*x.m.pj:0;tot+=v;return {c,n:x?x.g.name:c,v,etf:x&&x.etf};});
+   const big=tot>0?vals.filter(v=>!v.etf&&v.v/tot>rd.cs*2/100&&tot>100000):[];
+   if(big.length)items.push({lv:'info',t:`比率が高くなっている保有：${big.map(v=>v.n).slice(0,3).join('・')}`,x:`値上がりなどで、保有全体の${rd.cs*2}%を超えています。売る必要はありません。目標の比率を超えている間は自動で買い増しを止め、他の銘柄に回すので、時間とともに比率は下がっていきます。`});}
   // 3) 分散
   if(jpT.length>0&&jpT.length<10&&b.target.etfN===0)items.push({lv:'warn2',t:`分散が足りません（日本株${jpT.length}銘柄）`,x:'1社の減配や業績悪化の影響が大きくなります。段階型かパターンAにすると、合格銘柄が増えて分散しやすくなります。',
     act:stratId!=='hybrid'?{l:'段階型にする',fn:()=>{applyStrat('hybrid');runAll();}}:null});
@@ -994,7 +1087,7 @@ function adviseBuy(b){
   if(carryAmt()>Math.max(M,1)*1.5)items.push({lv:'warn2',t:`繰越が ${man(carryAmt())} まで増えています`,x:'使い切れないお金が毎月たまっています。上の「おすすめ」の設定に切り替えるか、ETFの割合を上げると使い切れます。'});
   if(nisa&&M>0){const room=NISA_YEAR-clampNum($('#nisaUsed').value,0,NISA_YEAR,0);if(M>room)items.push({lv:'info',t:`今年のNISA成長枠は残り ${man(Math.max(0,room))}`,x:'枠を超えた分は、リストで「特定」と表示され、課税口座での購入になります。'});}
   if(!Object.keys(st.holdings).length&&b.orders.length)items.push({lv:'info',t:'はじめての方へ',x:'①下のリストどおりにSBI証券で注文（S株・預り区分はNISA）→ ②「注文した分を保有に反映」を押す。これだけで、翌月は続きから計算されます。'});
-  if(!items.some(i=>i.lv==='warn2'||i.act))items.unshift({lv:'good',t:'設定は長期の高配当投資に合っています',x:`日本株${jpT.length}銘柄${b.target.etfN?`＋米国ETF${b.target.etfN}本`:''}に分散し、今月は ${man(M-b.left)} を使います。`});
+  if(!items.some(i=>i.lv==='warn2'||i.act))items.unshift({lv:'good',t:'設定は長期の高配当投資に合っています',x:`日本株${jpT.length}銘柄${b.target.etfN?`＋米国ETF${b.target.etfN}本`:''}に分散し（推奨 日本株${rd.min}〜${rd.ideal}銘柄）、今月は ${man(M-b.left)} を使います。`});
   return items;}
 function renderNavi(b){
   // 大事な順：警告 → ボタン付きのおすすめ → その他。1件目だけ開き、残りは折りたたむ（スマホでリストが隠れないように）
@@ -1014,7 +1107,7 @@ let lastBuy=null;
 function renderBuy(){
   if(!companies.length)return;
   st.strat=stratId;saveStore();
-  $('#buySetSum').textContent=`今月 ${man(clampNum($('#buyAmt').value,0,1e10,0))}・注文${clampNum($('#maxOrders').value,1,100,10)}件まで・1件${yen(clampNum($('#minOrder').value,0,1e7,0))}円以上${$('#acct').value==='nisa'?`・今年のNISA使用 ${man(clampNum($('#nisaUsed').value,0,NISA_YEAR,0))}`:''}`;
+  $('#buySetSum').textContent=`今月 ${man(clampNum($('#buyAmt').value,0,1e10,0))}・注文${$('#autoOrders').checked?'おまかせ':clampNum($('#maxOrders').value,1,100,10)+'件まで'}・1件${yen(clampNum($('#minOrder').value,0,1e7,0))}円以上${$('#acct').value==='nisa'?`・今年のNISA使用 ${man(clampNum($('#nisaUsed').value,0,NISA_YEAR,0))}`:''}`;
   $('#buyStrat').textContent=(STRATS.find(s=>s.id===stratId)||{}).nm||'';
   const bts=tierSet(cfgCurrent());
   $('#carryLbl').textContent=`${man(carryAmt())}を今月に足す`;
@@ -1037,25 +1130,123 @@ function renderBuy(){
       b.orders.map(o=>`${o.o.x.g.code}　${o.o.x.g.name}　${o.n}${o.o.x.etf?'口':'株'}　約${yen(o.amt)}円　${o.acct}${o.o.x.US?'（米国：外貨決済か円貨決済を選ぶ）':''}`).join('\n');
     $('#applyBuy').disabled=false;}
   const bm=$('#buyMsg');
-  const idle=b.M>0&&b.left>Math.max(10000,b.M*0.1)&&b.skipped<=0;
-  bm.className='msg';bm.textContent=idle?`${man(b.left)}が残ります。理由とおすすめは上の「設定ナビ」をご覧ください。`:b.orders.length&&b.skipped>0?`不足している銘柄はほかに${b.skipped}件あります。注文数の上限（${clampNum($('#maxOrders').value,1,100,10)}件）の範囲で不足の大きい順に選んでいるので、翌月以降に順番に回ります。`:'';
+  const idle=b.M>0&&b.left>Math.max(10000,b.M*0.1);   // お金が大きく残る時は、その案内を最優先
+  bm.className='msg';bm.textContent=idle?`${man(b.left)}が残ります。理由とおすすめは上の「設定ナビ」をご覧ください。`:b.orders.length&&b.skipped>0?`不足している銘柄はほかに${b.skipped}件あります。注文数の上限（${b.K}件）の範囲で不足の大きい順に選んでいるので、翌月以降に順番に回ります。`:'';
   $('#undoBuy').disabled=!st.last;
   $('#reviewPanel').style.display=b.review.length?'':'none';
   const nInfo=b.review.filter(r=>r.info).length;
   $('#reviewBox').innerHTML=b.review.filter(r=>!r.info).map(r=>`<p class="msg err" style="margin:0 0 8px"><b>${esc(r.name||r.code)}（${esc(r.code)}・${r.sh}株）</b><br>${esc(r.msg)}</p>`).join('')+
     (nInfo?`<details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">買い増しを止めている保有 ${nInfo}銘柄（売る必要なし）</summary>${b.review.filter(r=>r.info).map(r=>`<p class="msg" style="margin:6px 0 0"><b>${esc(r.name||r.code)}（${esc(r.code)}・${r.sh}株）</b><br>${esc(r.msg)}</p>`).join('')}</details>`:'');
+  const mo=$('#maxOrders'),auto=$('#autoOrders').checked;mo.disabled=auto;$('#autoKLbl').textContent=auto?`今月は${b.K}件`:'';   // 手動の値は上書きしない
+  const done=!!(st.applied||{})[new Date().toISOString().slice(0,7)];
+  $('#buySteps').querySelectorAll('li').forEach(li=>li.classList.toggle('done',done));
   renderNavi(b);
+  renderSwap(b);
   renderHold();
 }
+/* ---------- 入れ替えナビ（張り替え） ----------
+   売る候補：減配・条件外れ・データ異常（＋「リベ大式へ寄せる」時は買い増し停止中の保有）
+   買う候補：今の目標配分で不足が大きい銘柄（リベ大基準・危機に強い順）。売却代金の範囲で、最低購入額以上 */
+const TAXR=0.20315;
+function acctOf(c){const m=(st.meta||{})[c]||{};return m.acct||($('#acct').value==='nisa'?'NISA':'特定');}
+function buildSwap(b){
+  if(!b)return null;
+  const prio=$('#swapPrio').checked,minO=clampNum($('#minOrder').value,0,1e7,0),H=st.holdings,ts=tierSet(cfgCurrent());
+  const sells=b.review.filter(r=>r.x&&r.x.m.pj>0&&!r.x.etf&&(['cut','fail','suspect'].includes(r.kind)||(prio&&r.kind==='prio'))).map(r=>{
+    const ac=acctOf(r.code),cost=((st.meta||{})[r.code]||{}).cost,px=r.x.m.pj,amt=r.sh*px,gain=cost?(px-cost)*r.sh:null;
+    const tax=ac==='特定'&&gain!=null?gain*TAXR:0;   // プラスなら税金、マイナスなら損出しで戻る税金の目安
+    const why={cut:'減配の可能性',fail:'条件を外れた',suspect:'データ異常の疑い',prio:'リベ大式へ寄せる'}[r.kind];
+    let note='';
+    if(ac==='NISA'){note=gain!=null&&gain<0?'NISAの損失は他の利益と相殺できません。売った枠が戻るのは翌年で、買い直す分は今年の枠を使います。':'売った枠が戻るのは翌年です。買い直す分は今年のNISA枠を使います。';}
+    else if(gain==null)note='取得単価を入れると税金の目安が出ます。';
+    else if(gain<0)note=`含み損 ${man(-gain)}。売ると「損出し」になり、今年の売却益や配当と相殺され、税金が最大約${man(-tax)}戻る・減る見込みです（特定口座・源泉徴収ありの場合は自動）。`;
+    else note=`含み益 ${man(gain)}。売ると税金が約${man(tax)}かかります。`;
+    const weak=r.kind==='prio'&&ac==='NISA';   // NISAで理由が弱い入れ替えは非推奨
+    return {r,ac,px,amt,gain,tax,why,note,weak,net:amt-Math.max(0,tax)};});
+  const sold=new Set(sells.map(x=>x.r.code));
+  // 優先順：リベ大基準 → 危機で配当を守った記録あり → 不足額が大きい
+  const score=o=>(ts&&ts.has(o.x.g.code)?2:0)+(o.x.m.crisis!=null?(o.x.m.crisis>=90?1.5:0.5):0);
+  const pool=b.target.items.filter(o=>!o.x.etf&&!sold.has(normCode(o.x.g.code))&&o.x.m.pj>0).map(o=>{const cur=(H[normCode(o.x.g.code)]||0)*o.x.m.pj;
+    return {x:o.x,def:o.amt*1.5-cur,cost:o.x.m.pj};}).filter(o=>o.def>0).sort((a,c)=>score(c)-score(a)||c.def-a.def);
+  // 口座ごとに売却代金を配る（NISAで売った分はNISAで、特定で売った分は特定で）。注文の手間を抑えるため1口座5銘柄まで・1件1万円以上が目安
+  const buys=[],used=new Set(),unit=Math.max(minO,10000);
+  for(const ac of ['NISA','特定']){let cash=sells.filter(x=>x.ac===ac&&!x.weak).reduce((a,x)=>a+x.net,0);
+    if(cash<=0)continue;
+    if(ac==='NISA'){const room=Math.max(0,NISA_YEAR-clampNum($('#nisaUsed').value,0,NISA_YEAR,0));if(cash>room){buys.push({over:cash-room,ac});cash=room;}}
+    const k=Math.max(1,Math.min(5,Math.floor(cash/unit))),per=cash/k;let cnt=0;
+    for(const o of pool){if(cnt>=k||cash<minO)break;if(used.has(o.x.g.code)||o.cost>cash)continue;
+      const want=cnt===k-1?cash:Math.min(cash,Math.max(per,o.cost));const n=Math.floor(want/o.cost);
+      if(n<1||n*o.cost<Math.min(minO,cash))continue;
+      buys.push({o,n,amt:n*o.cost,ac});cash-=n*o.cost;used.add(o.x.g.code);cnt++;}
+    // 端数：選んだ銘柄に1株ずつ足す
+    for(let g=0;g<200;g++){const y=buys.filter(y=>y.o&&y.ac===ac&&y.o.cost<=cash).sort((p,q)=>p.amt-q.amt)[0];if(!y)break;y.n++;y.amt+=y.o.cost;cash-=y.o.cost;}
+    buys.push({left:cash,ac});}
+  return {sells,buys};}
+function renderSwap(b){const box=$('#swapBox');if(!box)return;const sw=buildSwap(b);
+  if(!sw||!sw.sells.length){box.innerHTML=`<p class="msg ok" style="margin:0">入れ替えが必要な保有はありません。売らずに持ち続け、毎月の買付で配分を整えるのが基本です。</p>`;
+    $('#applySwap').disabled=true;$('#undoSwap').disabled=!st.lastSwap;lastSwap=null;return;}
+  lastSwap=sw;const act=sw.sells.filter(x=>!x.weak),bl=sw.buys.filter(x=>x.o);
+  box.innerHTML=`<h3 style="font-size:15px;margin:4px 0">売る候補</h3><div class="scroll"><table><thead><tr><th class="l">銘柄</th><th>理由</th><th>売る数</th><th>概算金額</th></tr></thead><tbody>`+
+    sw.sells.map(x=>`<tr class="${x.weak?'dim':''}"><td class="l name">${esc(x.r.name||x.r.code)}<small>${esc(x.r.code)}</small></td><td>${x.why}</td><td>${x.weak?'－':`<b>${x.r.sh}株</b>`}</td><td>${yen(x.amt)}</td></tr>
+      <tr class="detail"><td colspan="4"><span class="acct ${x.ac==='NISA'?'n':'t'}">${x.ac}</span> ${x.weak?'NISAで理由が弱い入れ替えは、枠を無駄にしやすいためおすすめしません（売らずに保有）。':esc(x.note)}</td></tr>`).join('')+'</tbody></table></div>'+
+    (bl.length?`<h3 style="font-size:15px;margin:12px 0 4px">代わりに買う</h3><div class="scroll"><table><thead><tr><th class="l">銘柄</th><th>買う数</th><th>概算金額</th><th>口座</th></tr></thead><tbody>`+
+      bl.map(y=>`<tr><td class="l name">${esc(y.o.x.g.name)}<small>${esc(y.o.x.g.code)}　${esc(y.o.x.g.sector)}${tierSet(cfgCurrent())&&tierSet(cfgCurrent()).has(y.o.x.g.code)?'　リベ大基準':''}${y.o.x.m.crisis!=null?`　危機の配当維持${Math.round(Math.min(y.o.x.m.crisis,100))}%`:''}</small></td><td><b>${y.n}株</b></td><td>${yen(y.amt)}</td><td><span class="acct ${y.ac==='NISA'?'n':'t'}">${y.ac}</span></td></tr>`).join('')+'</tbody></table></div>':'')+
+    sw.buys.filter(y=>y.over).map(y=>`<p class="msg" style="margin:8px 0 0">今年のNISA枠が足りないため、${man(y.over)}分は特定口座で買うか、来年に回してください。</p>`).join('')+
+    sw.buys.filter(y=>y.left>1000).map(y=>`<p class="note" style="margin:6px 0 0">${y.ac}：${man(y.left)}が残ります。来月の買付に回してください。</p>`).join('');
+  $('#applySwap').disabled=!act.length;$('#undoSwap').disabled=!st.lastSwap;}
+let lastSwap=null;
+
 function renderHold(){const q=quoteMap(),H=st.holdings,codes=Object.keys(H).sort();
-  $('#holdTable').innerHTML=codes.length?`<thead><tr><th class="l">銘柄</th><th>株数</th><th>評価額（目安）</th><th></th></tr></thead><tbody>`+
-    codes.map(c=>{const x=q[c];return `<tr><td class="l name">${esc(x?x.g.name:'（データなし）')}<small>${esc(c)}</small></td>
-      <td><input type="number" min="0" step="1" value="${H[c]}" data-c="${esc(c)}" aria-label="${esc(c)}の株数"></td><td>${x&&x.m.pj>0?yen(H[c]*x.m.pj):'－'}</td>
+  const MI=st.meta||{};
+  $('#holdTable').innerHTML=codes.length?`<thead><tr><th class="l">銘柄</th><th>株数</th><th>口座</th><th>取得単価（円）</th><th>評価額（目安）</th><th></th></tr></thead><tbody>`+
+    codes.map(c=>{const x=q[c],mi=MI[c]||{},ac=mi.acct||($('#acct').value==='nisa'?'NISA':'特定');return `<tr><td class="l name">${esc(x?x.g.name:'（データなし）')}<small>${esc(c)}</small></td>
+      <td><input type="number" min="0" step="1" value="${H[c]}" data-c="${esc(c)}" aria-label="${esc(c)}の株数"></td>
+      <td><select data-ac="${esc(c)}" aria-label="${esc(c)}の口座"><option${ac==='NISA'?' selected':''}>NISA</option><option${ac==='特定'?' selected':''}>特定</option></select></td>
+      <td><input type="number" min="0" step="0.1" value="${mi.cost??''}" placeholder="任意" data-cost="${esc(c)}" aria-label="${esc(c)}の取得単価（円）"></td>
+      <td>${x&&x.m.pj>0?yen(H[c]*x.m.pj):'－'}</td>
       <td><button class="btn ghost" data-del="${esc(c)}" style="padding:4px 10px">削除</button></td></tr>`;}).join('')+'</tbody>'
     :`<tr><td class="empty">まだ保有がありません。今月の買付を注文したら「保有に反映」を押してください。</td></tr>`;
   $('#holdTable').querySelectorAll('input[data-c]').forEach(i=>i.onchange=()=>{const v=Math.floor(+i.value);if(v>0)st.holdings[i.dataset.c]=v;else delete st.holdings[i.dataset.c];saveStore();renderBuy();});
   $('#holdTable').querySelectorAll('button[data-del]').forEach(bt=>bt.onclick=()=>{delete st.holdings[bt.dataset.del];saveStore();renderBuy();});
+  const setMeta=(c,k,v)=>{st.meta=st.meta||{};st.meta[c]={...(st.meta[c]||{}),[k]:v};if(v===null||v==='')delete st.meta[c][k];saveStore();renderSwap(lastBuy);};
+  $('#holdTable').querySelectorAll('select[data-ac]').forEach(e=>e.onchange=()=>setMeta(e.dataset.ac,'acct',e.value));
+  $('#holdTable').querySelectorAll('input[data-cost]').forEach(e=>e.onchange=()=>{const v=+e.value;setMeta(e.dataset.cost,'cost',e.value!==''&&isFinite(v)&&v>0?v:null);});
 }
+/* ---------- 設定の保存（次に開いた時も同じ設定） ---------- */
+const PREF_IDS=['buyAmt','acct','usMode','capUS','etfPick','minOrder','maxOrders','lot'];   // NISAの残り・使用額は買付の反映と一緒に別で保存
+function savePrefs(){st.prefs={...(st.prefs||{})};PREF_IDS.forEach(id=>{const e=$('#'+id);if(e)st.prefs[id]=e.value;});
+  st.prefs.autoOrders=$('#autoOrders').checked;st.prefs.simple=document.body.classList.contains('simple');saveStore();}
+function loadPrefs(){const p=st.prefs;if(!p)return;PREF_IDS.forEach(id=>{const e=$('#'+id);if(e&&p[id]!=null&&p[id]!=='')e.value=p[id];});
+  if(p.autoOrders!=null)$('#autoOrders').checked=!!p.autoOrders;setSimple(!!p.simple,false);}
+function setSimple(on,save=true){document.body.classList.toggle('simple',on);$('#simpleBtn').textContent=on?'くわしい画面にする':'かんたん表示にする';
+  if(on)show('buy');if(save)savePrefs();}
+
+/* ---------- はじめにナビ：3つの質問で設定が終わる ---------- */
+const WIZ={i:0,a:{amt:30000,acct:'nisa',us:'etf'}};
+const WIZQ=[
+  {t:'毎月いくら積み立てますか？',body:()=>`${[10000,30000,50000,100000,200000].map(v=>`<button class="choice${WIZ.a.amt===v?' on':''}" data-amt="${v}">${man(v)}${v===200000?'<small>NISA成長投資枠を年240万円まで使い切るペース</small>':''}</button>`).join('')}
+     <label class="f" style="margin-top:8px">それ以外の金額（円）<input type="number" id="wizAmt" min="1000" step="1000" value="${[10000,30000,50000,100000,200000].includes(WIZ.a.amt)?'':WIZ.a.amt}"></label>`},
+  {t:'どの口座で買いますか？',body:()=>`<button class="choice${WIZ.a.acct==='nisa'?' on':''}" data-acct="nisa">NISA（成長投資枠）<small>おすすめ。配当に税金がかかりません（日本株）。年240万円まで</small></button>
+     <button class="choice${WIZ.a.acct==='tax'?' on':''}" data-acct="tax">特定口座（課税）<small>NISA枠を使い切った後や、NISAを使わない場合</small></button>`},
+  {t:'米国の高配当ETFも入れますか？',body:()=>`<button class="choice${WIZ.a.us==='etf'?' on':''}" data-us="etf">入れる（全体の30%）<small>おすすめ。円以外の収入源で通貨も分散。VYM・HDV・SPYDに均等</small></button>
+     <button class="choice${WIZ.a.us==='none'?' on':''}" data-us="none">日本株だけにする<small>NISAでは日本株の方が税金面で有利。為替の心配もありません</small></button>`},
+  {t:'この設定ではじめます',body:()=>`<p class="lead">毎月 <b>${man(WIZ.a.amt)}</b>・<b>${WIZ.a.acct==='nisa'?'NISA':'特定口座'}</b>・<b>${WIZ.a.us==='etf'?'日本株＋米国ETF30%':'日本株のみ'}</b></p>
+     <ul class="lead" style="padding-left:1.2em;margin:0"><li>戦略は「段階型」：リベ大式の基準の銘柄を最優先し、足りない分を増配成長型の基準で埋めます</li>
+     <li>S株（1株単位）で、推奨の20〜30銘柄に分散。最初の月から、予算の許す限り全銘柄に少しずつ買います</li>
+     <li>毎月やることは「リストどおりに注文 → 反映ボタン」だけです</li></ul>
+     <p class="note">あとで変えたい時は、上の「はじめにナビ」からやり直せます。</p>`}];
+function wizRender(){const q=WIZQ[WIZ.i];$('#wizStep').textContent=`${WIZ.i+1} / ${WIZQ.length}`;$('#wizTitle').textContent=q.t;$('#wizBody').innerHTML=q.body();
+  $('#wizBack').style.visibility=WIZ.i?'visible':'hidden';$('#wizNext').textContent=WIZ.i===WIZQ.length-1?'この設定ではじめる':'次へ';
+  $('#wizBody').querySelectorAll('.choice').forEach(c=>c.onclick=()=>{if(c.dataset.amt){WIZ.a.amt=+c.dataset.amt;}if(c.dataset.acct)WIZ.a.acct=c.dataset.acct;if(c.dataset.us)WIZ.a.us=c.dataset.us;wizRender();});
+  const wa=$('#wizAmt');if(wa)wa.oninput=()=>{const v=Math.round(+wa.value);if(v>=1000){WIZ.a.amt=v;$('#wizBody').querySelectorAll('[data-amt]').forEach(c=>c.classList.remove('on'));}};}
+function wizOpen(){WIZ.i=0;const p=st.prefs||{};WIZ.a={amt:+(p.buyAmt||$('#buyAmt').value||30000),acct:p.acct||'nisa',us:(p.usMode||'etf')==='none'?'none':'etf'};$('#wiz').hidden=false;wizRender();setTimeout(()=>$('#wizNext').focus(),0);}
+function wizClose(){$('#wiz').hidden=true;st.prefs={...(st.prefs||{}),wizSeen:true};saveStore();}
+function wizFinish(){const a=WIZ.a;$('#buyAmt').value=a.amt;$('#monthly').value=a.amt;$('#acct').value=a.acct;
+  if(hasUS&&etfs.length){$('#usMode').value=a.us;$('#capUS').value=30;$('#etfPick').value='all';}else $('#usMode').value='none';
+  $('#lot').value='1';$('#autoOrders').checked=true;$('#minOrder').value=3000;applyStrat('hybrid');syncModes();
+  document.body.classList.add('simple');savePrefs();st.prefs.wizSeen=true;st.prefs.done=true;saveStore();
+  $('#wiz').hidden=true;runAll();setSimple(true);}
+
 function holdMsg(t,ok){const m=$('#holdMsg');m.className='msg '+(ok?'ok':'err');m.textContent=t;}
 function initBuy(){
   if(st.nisaLeft!=null){st.nisaLeft=Math.round(clampNum(st.nisaLeft,0,12e6,12e6));$('#nisaLeft').value=st.nisaLeft;}
@@ -1063,15 +1254,39 @@ function initBuy(){
   $('#nisaUsed').value=st.nisaUsed[thisYear()]||0;
   if(st.strat&&STRATS.some(s=>s.id===st.strat))applyStrat(st.strat);
   $('#buyAmt').value=$('#monthly').value;
+  if(st.prefs){const p=st.prefs;PREF_IDS.forEach(id=>{const e=$('#'+id);if(e&&p[id]!=null&&p[id]!=='')e.value=p[id];});
+    if(p.autoOrders!=null)$('#autoOrders').checked=!!p.autoOrders;document.body.classList.toggle('simple',!!p.simple);
+    $('#simpleBtn').textContent=p.simple?'くわしい画面にする':'かんたん表示にする';}else $('#simpleBtn').textContent='かんたん表示にする';
+  [...PREF_IDS,'autoOrders'].forEach(id=>{const e=$('#'+id);if(e)e.addEventListener('change',savePrefs);});
+  $('#autoOrders').addEventListener('change',()=>renderBuy());
+  $('#simpleBtn').onclick=()=>setSimple(!document.body.classList.contains('simple'));
+  $('#wizBtn').onclick=()=>wizOpen();
+  $('#wizBack').onclick=()=>{if(WIZ.i>0){WIZ.i--;wizRender();}};
+  $('#wizNext').onclick=()=>{if(WIZ.i<WIZQ.length-1){WIZ.i++;wizRender();}else wizFinish();};
+  $('#wizSkip').onclick=()=>wizClose();
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#wiz').hidden)wizClose();});
   $('#useCarry').addEventListener('change',()=>renderBuy());
+  $('#swapPrio').addEventListener('change',()=>renderSwap(lastBuy));
+  $('#applySwap').onclick=()=>{const sw=lastSwap;if(!sw)return;
+    const sells=sw.sells.filter(x=>!x.weak),buys=sw.buys.filter(y=>y.o);if(!sells.length)return;
+    const before=JSON.parse(JSON.stringify(st.holdings)),metaBefore=JSON.parse(JSON.stringify(st.meta||{})),usedBefore=st.nisaUsed[thisYear()]||0,leftBefore=clampNum($('#nisaLeft').value,0,12e6,12e6);
+    sells.forEach(x=>{delete st.holdings[x.r.code];if(st.meta)delete st.meta[x.r.code];});
+    let nisaA=0;buys.forEach(y=>{const c=normCode(y.o.x.g.code);st.holdings[c]=(st.holdings[c]||0)+y.n;st.meta=st.meta||{};st.meta[c]={...(st.meta[c]||{}),acct:y.ac};if(y.ac==='NISA')nisaA+=y.amt;});
+    if(nisaA>0){st.nisaUsed[thisYear()]=Math.round(usedBefore+nisaA);$('#nisaUsed').value=st.nisaUsed[thisYear()];st.nisaLeft=Math.round(Math.max(0,leftBefore-nisaA));$('#nisaLeft').value=st.nisaLeft;}
+    st.lastSwap={before,metaBefore,usedBefore,leftBefore,year:thisYear()};const ok=saveStore();renderPF();renderSim();renderBuy();
+    const m=$('#swapMsg');m.className='msg '+(ok?'ok':'err');m.textContent=`${sells.length}銘柄を売り、${buys.length}銘柄を買った形で保有に反映しました。買った銘柄の取得単価は、約定後にSBIの画面の値を入れてください。`;};
+  $('#undoSwap').onclick=()=>{const l=st.lastSwap;if(!l)return;st.holdings=l.before;st.meta=l.metaBefore;st.nisaUsed[l.year]=l.usedBefore;$('#nisaLeft').value=l.leftBefore;st.nisaLeft=l.leftBefore;
+    if(l.year===thisYear())$('#nisaUsed').value=l.usedBefore;st.lastSwap=null;saveStore();renderPF();renderSim();renderBuy();const m=$('#swapMsg');m.className='msg ok';m.textContent='入れ替えを取り消しました。';};
   ['buyAmt','maxOrders','minOrder'].forEach(id=>$('#'+id).addEventListener('input',()=>{clearTimeout(renderBuy._t);renderBuy._t=setTimeout(renderBuy,150);}));
   $('#nisaUsed').addEventListener('change',()=>{st.nisaUsed[thisYear()]=Math.round(clampNum($('#nisaUsed').value,0,NISA_YEAR,0));saveStore();renderBuy();});
   $('#nisaLeft').addEventListener('change',()=>{st.nisaLeft=Math.round(clampNum($('#nisaLeft').value,0,12e6,12e6));saveStore();});
   $('#applyBuy').onclick=()=>{const b=lastBuy;if(!b||!b.orders.length)return;
     const add={};let nisaA=0;b.orders.forEach(o=>{const c=normCode(o.o.x.g.code);add[c]=(add[c]||0)+o.n;if(o.acct==='NISA')nisaA+=o.amt;});
-    const usedCarry=$('#useCarry').checked;st.last={carryBefore:carryAmt(),add,nisaA:Math.round(nisaA),at:new Date().toISOString(),year:thisYear()};
+    const usedCarry=$('#useCarry').checked,ym=new Date().toISOString().slice(0,7);st.applied=st.applied||{};
+    st.last={ym,appliedBefore:st.applied[ym]||null,carryBefore:carryAmt(),add,nisaA:Math.round(nisaA),at:new Date().toISOString(),year:thisYear()};
     Object.entries(add).forEach(([c,n])=>st.holdings[c]=(st.holdings[c]||0)+n);
     st.carry=Math.max(0,Math.round(b.left)+(usedCarry?0:carryAmt()));   // 使い切れなかった分は翌月へ
+    const dd=new Date();st.applied[ym]=`${dd.getMonth()+1}月${dd.getDate()}日`;
     if(nisaA>0){st.nisaUsed[thisYear()]=Math.round((st.nisaUsed[thisYear()]||0)+nisaA);$('#nisaUsed').value=st.nisaUsed[thisYear()];
       st.nisaLeft=Math.round(Math.max(0,clampNum($('#nisaLeft').value,0,12e6,12e6)-nisaA));$('#nisaLeft').value=st.nisaLeft;}
     const ok=saveStore();renderPF();renderSim();renderBuy();
@@ -1079,6 +1294,7 @@ function initBuy(){
   $('#undoBuy').onclick=()=>{const l=st.last;if(!l)return;
     Object.entries(l.add).forEach(([c,n])=>{st.holdings[c]=(st.holdings[c]||0)-n;});cleanHoldings();
     if(l.carryBefore!=null)st.carry=l.carryBefore;
+    if(l.ym){st.applied=st.applied||{};if(l.appliedBefore)st.applied[l.ym]=l.appliedBefore;else delete st.applied[l.ym];}
     if(l.nisaA>0){st.nisaUsed[l.year]=Math.round(Math.max(0,(st.nisaUsed[l.year]||0)-l.nisaA));if(l.year===thisYear())$('#nisaUsed').value=st.nisaUsed[l.year];
       st.nisaLeft=Math.round(Math.min(12e6,clampNum($('#nisaLeft').value,0,12e6,12e6)+l.nisaA));$('#nisaLeft').value=st.nisaLeft;}
     st.last=null;saveStore();renderPF();renderSim();renderBuy();const m=$('#buyMsg');m.className='msg ok';m.textContent='直前の反映を取り消しました。';};
@@ -1089,13 +1305,13 @@ function initBuy(){
     if(!(n>=0)){holdMsg('株数を入れてください（0で削除）。',false);return;}
     if(n>0)st.holdings[c]=n;else delete st.holdings[c];saveStore();$('#addCode').value='';$('#addSh').value='';
     holdMsg(`${c} を${n>0?n+'株に':'削除'}しました。`,true);renderBuy();};
-  $('#importHold').onclick=()=>{const {out,bad,nisa,carry}=parseHoldings($('#holdText').value);const n=Object.keys(out).length;
+  $('#importHold').onclick=()=>{const {out,bad,nisa,carry,meta}=parseHoldings($('#holdText').value);const n=Object.keys(out).length;
     if(!n){holdMsg('コードと株数を読み取れませんでした。1行に「8058 30」の形で入れてください。',false);return;}
-    st.holdings=out;cleanHoldings();st.last=null;if(carry!=null)st.carry=carry;
+    st.holdings=out;cleanHoldings();st.last=null;if(carry!=null)st.carry=carry;if(Object.keys(meta).length)st.meta=meta;
     if(nisa){st.nisaUsed[nisa.year]=nisa.used;st.nisaLeft=Math.min(12e6,nisa.left);$('#nisaLeft').value=st.nisaLeft;if(nisa.year===thisYear())$('#nisaUsed').value=nisa.used;}
     saveStore();renderPF();renderSim();renderBuy();holdMsg(`${n}銘柄を読み込みました${nisa?'（NISAの使用額・残りも復元）':''}${bad?`（読めなかった行 ${bad}件）`:''}。`,true);};
   $('#exportHold').onclick=()=>{$('#holdText').value=Object.entries(st.holdings).map(([c,n])=>`${c} ${n}`).join('\n')+
-    `\n# NISA ${thisYear()}年の使用額 ${Math.round(st.nisaUsed[thisYear()]||0)} / 生涯残り ${Math.round(clampNum($('#nisaLeft').value,0,12e6,12e6))}\n# 繰越 ${carryAmt()}`;
+    Object.entries(st.meta||{}).filter(([c])=>st.holdings[c]).map(([c,m])=>`\n# 口座 ${c} ${m.acct||''} ${m.cost||''}`).join('')+`\n# NISA ${thisYear()}年の使用額 ${Math.round(st.nisaUsed[thisYear()]||0)} / 生涯残り ${Math.round(clampNum($('#nisaLeft').value,0,12e6,12e6))}\n# 繰越 ${carryAmt()}`;
     holdMsg('上の欄に書き出しました。コピーしてメモ帳などに保存してください。',true);};
   $('#clearHold').onclick=()=>{if($('#clearHold').dataset.arm!=='1'){$('#clearHold').dataset.arm='1';$('#clearHold').textContent='もう一度押すと消去';
       setTimeout(()=>{$('#clearHold').dataset.arm='';$('#clearHold').textContent='保有をすべて消す';},4000);return;}
@@ -1132,7 +1348,8 @@ async function loadAuto(silent){const msg=$('#autoMsg');
     if(us0)ds.textContent+='　※'+us0;
     const my=d.min_yield??2.5;msg.textContent=`${d.updated||'日時不明'} 更新：${n}銘柄を読み込みました（日本株は利回り${my}%以上${d.min_yield_us!=null?`、米国株は${d.min_yield_us}%以上`:''}）。`;
     $('#autoLead').textContent=`最終更新 ${d.updated||'日時不明'}。日本の上場株すべて（プライム・スタンダード・グロース）${d.min_yield_us!=null?'とS&P500採用の米国株':''}から、高配当の候補を自動抽出しています。`;
-    setTimeout(()=>show(Object.keys(st.holdings).length?'buy':'pf'),400);}
+    setTimeout(()=>{show(document.body.classList.contains('simple')||Object.keys(st.holdings).length?'buy':'pf');
+      if(!(st.prefs&&(st.prefs.wizSeen||st.prefs.done)))wizOpen();},400);}
   catch(e){msg.className='msg err';msg.textContent='自動データを読み込めませんでした（'+e.message+'）。GitHub Pagesで開いているか確認するか、下のCSV読込か「サンプルデータで試す」を使ってください。';}}
 $('#autoBtn').onclick=()=>loadAuto(false);
 (function(){const m=location.host.match(/^([^.]+)\.github\.io$/),repo=location.pathname.split('/')[1];

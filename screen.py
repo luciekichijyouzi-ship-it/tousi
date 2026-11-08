@@ -501,7 +501,7 @@ def fetch_financials(code: str, yft: str = None):
 
 
 # ---------- 3a. 過去の危機（リーマン・コロナ）での配当と株価 ----------
-CRISIS_CACHE = CACHE_DIR / "crisis_v1.json"      # 過去の事実なので一度計算したら使い回す
+CRISIS_CACHE = CACHE_DIR / "crisis_v2.json"      # 過去の事実なので一度計算したら使い回す（計算方法を変えたら番号を上げる）
 CRISES = {
     # 名前: (配当の比較：危機前の年, 危機中の年, 株価：高値を見る期間, 下落を見る期間)
     "lehman": ((2007, 2008), (2009, 2010), ("2007-01-01", "2008-08-31"), ("2008-09-01", "2009-12-31")),
@@ -514,9 +514,15 @@ def crisis_metrics(close: pd.Series, div: pd.Series):
     out = {}
     if close is None or close.dropna().empty:
         return None
-    close = close.dropna()
+    close = pd.to_numeric(close, errors="coerce")
+    close = close[close.notna() & (close > 0) & (close != float("inf"))]     # ゼロ・非数・無限大の株価は除く（再上場銘柄などの古いデータ対策）
+    if close.empty:
+        return None
     close.index = close.index.tz_localize(None) if close.index.tz is not None else close.index
-    div = (div if div is not None else pd.Series(dtype=float)).fillna(0)
+    div = pd.to_numeric(div if div is not None else pd.Series(dtype=float), errors="coerce")
+    broken = div.abs() == float("inf")              # 空欄（売買停止日・上場前など）は「配当なし」、無限大だけを壊れたデータとみなす
+    broken_years = set(div.index[broken & (div.index.notna())].year) if len(div) and broken.any() else set()
+    div = div.where(~broken).fillna(0)
     div.index = div.index.tz_localize(None) if getattr(div.index, "tz", None) is not None else div.index
     div = div[div > 0]
     annual = div.groupby(div.index.year).sum()
@@ -524,7 +530,9 @@ def crisis_metrics(close: pd.Series, div: pd.Series):
     for name, (pre_y, cr_y, (p0, p1), (c0, c1)) in CRISES.items():
         rec = {}
         # 配当：危機前の年から上場・配当の記録があること
-        if first_px <= pd.Timestamp(f"{pre_y[0]}-01-31"):
+        if broken_years & set(pre_y + cr_y):
+            rec["div"] = None                              # 配当データが壊れている年がある → 判定しない
+        elif first_px <= pd.Timestamp(f"{pre_y[0]}-01-31"):
             pre_last = float(annual.get(pre_y[1], 0)); pre_2 = float(annual.get(pre_y[0], 0)) + pre_last
             cr = [float(annual.get(y, 0)) for y in cr_y]
             if pre_last > 0:
@@ -539,7 +547,9 @@ def crisis_metrics(close: pd.Series, div: pd.Series):
         a = close[(close.index >= p0) & (close.index <= p1)]
         b = close[(close.index >= c0) & (close.index <= c1)]
         if len(a) > 20 and len(b) > 20:
-            rec["dd"] = round((float(b.min()) / float(a.max()) - 1) * 100, 1)
+            dd = (float(b.min()) / float(a.max()) - 1) * 100
+            if math.isfinite(dd):
+                rec["dd"] = round(dd, 1)
         out[name] = rec or None
     return out
 
