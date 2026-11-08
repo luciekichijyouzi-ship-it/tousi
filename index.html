@@ -332,11 +332,12 @@ tr.detail td{background:var(--paper);white-space:normal;text-align:left;font-siz
   <div class="panel">
     <h2>今月の買付リスト</h2>
     <p class="lead" style="margin-bottom:6px">戦略：<b id="buyStrat"></b>。不足している銘柄から順に、今月買う株数を出します。</p>
-    <ol class="steps" id="buySteps"><li>下のリストを確認</li><li>SBI証券で注文（S株・預り区分はNISA）</li><li>「注文した分を保有に反映」を押す</li></ol>
+    <ol class="steps" id="buySteps"><li>下のリストを確認</li><li>SBI証券で上から順に注文（「📋 コピー」→ 検索欄に貼る。S株・預り区分は表示どおり）。注文したらチェック</li><li>「注文した分を保有に反映」を押す</li></ol>
   </div>
   <div class="kpis" id="buyKpi"></div>
   <div class="panel navi" id="naviPanel"><h2>設定ナビ</h2><div id="naviBox"></div></div>
   <div class="panel">
+    <div id="buyProg" role="status" style="margin:0 0 8px"></div>
     <div class="scroll"><table id="buyTable"></table></div>
     <div class="msg" id="buyMsg" role="status"></div>
     <h2 style="margin-top:18px">注文メモ</h2>
@@ -1103,6 +1104,16 @@ function renderNavi(b){
   const urgent=items.some(i=>i.lv==='warn2'||i.act);   // 注意やおすすめがある時だけリストの上に出す
   if(!urgent){if(np.previousElementSibling!==lp)lp.after(np);}else if(np.previousElementSibling!==kp)kp.after(np);}
 
+/* ---------- 注文の順番・注文済みチェック ---------- */
+const ordKey=o=>`${normCode(o.o.x.g.code)}|${o.acct}`;
+function orderedList(b){return [...b.orders].sort((a,c)=>(a.acct==='NISA'?0:1)-(c.acct==='NISA'?0:1)||(a.o.x.US?1:0)-(c.o.x.US?1:0)||c.amt-a.amt);}
+const curYM=()=>new Date().toISOString().slice(0,7);
+function renderProg(ord){const dn=doneSet(),nDone=ord.filter(o=>dn.has(ordKey(o))).length,all=nDone===ord.length;
+  $('#buyProg').innerHTML=`<b>注文の進み具合 ${nDone} / ${ord.length}件</b>${all?'　すべて注文済み。約定を確認したら「保有に反映」を押してください':'　注文したらチェックを付けておくと、中断しても続きから再開できます'}`;
+  $('#buyProg').className='msg'+(all?' ok':'');}
+function doneSet(){const d=st.ordered;return new Set(d&&d.ym===curYM()?d.keys:[]);}   // 月が変わると自動でリセット
+function setDone(k,on){const s2=doneSet();on?s2.add(k):s2.delete(k);st.ordered={ym:curYM(),keys:[...s2]};saveStore();}
+
 let lastBuy=null;
 function renderBuy(){
   if(!companies.length)return;
@@ -1121,13 +1132,23 @@ function renderBuy(){
       return a?`<div class="kpi minor"><b>${pct(l/a*100,0)}</b><span>保有株のうちリベ大基準の比率</span></div>`:'';})():''}`;
   if(!b.orders.length){
     $('#buyTable').innerHTML=`<tr><td class="empty">${b.noTarget?'今の戦略では合格銘柄がありません。別の戦略を選ぶか、条件をゆるめてください。':b.M<=0?'今月の投資額を入れてください。':!b.affordable?'不足している銘柄がないか、1株の価格が今月の投資額を超えています。今月は見送り、翌月にまとめて買う形でも問題ありません。':'最低購入額を下げると注文が出ます。'}</td></tr>`;
-    $('#buyText').value='';$('#applyBuy').disabled=true;
+    $('#buyText').value='';$('#applyBuy').disabled=true;$('#buyProg').innerHTML='';$('#buyProg').className='';
   }else{
-    $('#buyTable').innerHTML=`<thead><tr><th class="l">銘柄</th><th>買う数</th><th>概算金額</th><th>口座</th><th class="wideOnly">保有→買付後</th><th class="wideOnly">目標額までの不足</th></tr></thead><tbody>`+
-      b.orders.map(o=>{const x=o.o.x,h=st.holdings[normCode(x.g.code)]||0;return `<tr><td class="l name">${hasUS?`<span class="flag">${x.US?'米':'日'}</span>`:''}${esc(x.g.name)}<small>${esc(x.g.code)}　${esc(x.g.sector)}${x.US?`　$${x.price.toFixed(2)}`:''}</small></td>
+    const ord=orderedList(b),dn=doneSet();
+    $('#buyTable').innerHTML=`<thead><tr><th>済</th><th class="l">銘柄（注文する順）</th><th>買う数</th><th>概算金額</th><th>口座</th><th class="wideOnly">保有→買付後</th><th class="wideOnly">目標額までの不足</th></tr></thead><tbody>`+
+      ord.map((o,i)=>{const x=o.o.x,h=st.holdings[normCode(x.g.code)]||0,k=ordKey(o),on=dn.has(k),pv=ord[i-1],sep=pv&&pv.acct!==o.acct;
+      return `${sep?`<tr class="detail"><td colspan="7">ここから<b>${o.acct==='NISA'?'NISA':'特定口座'}</b>の注文（預り区分を切り替えてください）</td></tr>`:''}<tr class="${on?'dim':''}"><td><input type="checkbox" class="ordchk" data-k="${esc(k)}" ${on?'checked':''} aria-label="${esc(x.g.name)}を注文済みにする" style="width:22px;height:22px"></td>
+      <td class="l name">${hasUS?`<span class="flag">${x.US?'米':'日'}</span>`:''}${esc(x.g.name)}<small>${esc(x.g.code)}　${esc(x.g.sector)}${x.US?`　$${x.price.toFixed(2)}`:''}</small><button class="btn ghost sm copycode" type="button" data-code="${esc(x.g.code)}" aria-label="コード${esc(x.g.code)}をコピー" style="margin-top:4px;white-space:nowrap">📋 コピー</button></td>
       <td><b>${o.n.toLocaleString()}${x.etf?'口':'株'}</b></td><td>${yen(o.amt)}</td><td><span class="acct ${o.acct==='NISA'?'n':'t'}">${o.acct}</span>${bts&&!x.etf?`<br><small>${bts.has(x.g.code)?'リベ大基準':'A基準'}</small>`:''}</td><td class="wideOnly">${h}→${h+o.n}</td><td class="wideOnly">${man(o.o.def)}</td></tr>`;}).join('')+'</tbody>';
+    // チェックは表示だけ更新（リスト全体の再計算はしない）
+    $('#buyTable').querySelectorAll('.ordchk').forEach(c=>c.onchange=()=>{setDone(c.dataset.k,c.checked);c.closest('tr').classList.toggle('dim',c.checked);renderProg(ord);});
+    renderProg(ord);
+    $('#buyTable').querySelectorAll('.copycode').forEach(bt=>bt.onclick=async()=>{const code=bt.dataset.code;let ok=false;
+      try{await navigator.clipboard.writeText(code);ok=true;}catch(e){}
+      if(!ok){const t=document.createElement('textarea');t.value=code;document.body.appendChild(t);t.select();try{ok=document.execCommand('copy');}catch(e){}t.remove();}
+      bt.textContent=ok?'✓ コピー済み':code;setTimeout(()=>{bt.textContent='📋 コピー';},2000);});
     $('#buyText').value=`【${new Date().getFullYear()}年${new Date().getMonth()+1}月の買付】合計 約${yen(sumA)}円\n`+
-      b.orders.map(o=>`${o.o.x.g.code}　${o.o.x.g.name}　${o.n}${o.o.x.etf?'口':'株'}　約${yen(o.amt)}円　${o.acct}${o.o.x.US?'（米国：外貨決済か円貨決済を選ぶ）':''}`).join('\n');
+      ord.map(o=>`${o.o.x.g.code}　${o.o.x.g.name}　${o.n}${o.o.x.etf?'口':'株'}　約${yen(o.amt)}円　${o.acct}${o.o.x.US?'（米国：外貨決済か円貨決済を選ぶ）':''}`).join('\n');
     $('#applyBuy').disabled=false;}
   const bm=$('#buyMsg');
   const idle=b.M>0&&b.left>Math.max(10000,b.M*0.1);   // お金が大きく残る時は、その案内を最優先
@@ -1281,6 +1302,10 @@ function initBuy(){
   $('#nisaUsed').addEventListener('change',()=>{st.nisaUsed[thisYear()]=Math.round(clampNum($('#nisaUsed').value,0,NISA_YEAR,0));saveStore();renderBuy();});
   $('#nisaLeft').addEventListener('change',()=>{st.nisaLeft=Math.round(clampNum($('#nisaLeft').value,0,12e6,12e6));saveStore();});
   $('#applyBuy').onclick=()=>{const b=lastBuy;if(!b||!b.orders.length)return;
+    const ab=$('#applyBuy'),dn=doneSet(),rest=b.orders.filter(o=>!dn.has(ordKey(o))).length;
+    if(rest>0&&dn.size>0&&ab.dataset.arm!=='1'){ab.dataset.arm='1';ab.textContent=`未チェックが${rest}件あります。注文済みならもう一度押す`;
+      setTimeout(()=>{ab.dataset.arm='';ab.textContent='注文した分を保有に反映';},5000);return;}
+    ab.dataset.arm='';ab.textContent='注文した分を保有に反映';st.lastOrdered=st.ordered||null;st.ordered=null;
     const add={};let nisaA=0;b.orders.forEach(o=>{const c=normCode(o.o.x.g.code);add[c]=(add[c]||0)+o.n;if(o.acct==='NISA')nisaA+=o.amt;});
     const usedCarry=$('#useCarry').checked,ym=new Date().toISOString().slice(0,7);st.applied=st.applied||{};
     st.last={ym,appliedBefore:st.applied[ym]||null,carryBefore:carryAmt(),add,nisaA:Math.round(nisaA),at:new Date().toISOString(),year:thisYear()};
@@ -1294,6 +1319,7 @@ function initBuy(){
   $('#undoBuy').onclick=()=>{const l=st.last;if(!l)return;
     Object.entries(l.add).forEach(([c,n])=>{st.holdings[c]=(st.holdings[c]||0)-n;});cleanHoldings();
     if(l.carryBefore!=null)st.carry=l.carryBefore;
+    if(st.lastOrdered){st.ordered=st.lastOrdered;st.lastOrdered=null;}
     if(l.ym){st.applied=st.applied||{};if(l.appliedBefore)st.applied[l.ym]=l.appliedBefore;else delete st.applied[l.ym];}
     if(l.nisaA>0){st.nisaUsed[l.year]=Math.round(Math.max(0,(st.nisaUsed[l.year]||0)-l.nisaA));if(l.year===thisYear())$('#nisaUsed').value=st.nisaUsed[l.year];
       st.nisaLeft=Math.round(Math.min(12e6,clampNum($('#nisaLeft').value,0,12e6,12e6)+l.nisaA));$('#nisaLeft').value=st.nisaLeft;}
